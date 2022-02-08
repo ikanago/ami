@@ -1,4 +1,5 @@
 pub mod activation;
+pub mod network;
 
 #[cfg(test)]
 mod tests {
