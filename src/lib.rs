@@ -1,11 +1,26 @@
 pub mod activation;
 pub mod network;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+#[macro_export]
+macro_rules! assert_rel_eq_arr1 {
+    ($actual:expr, $expected:expr) => {
+        assert_eq!($actual.shape(), $expected.shape());
+        ndarray::Zip::from(&$actual)
+            .and(&$expected)
+            .for_each(|v, w| {
+                assert_relative_eq!(v, w);
+            });
+    };
+}
+
+#[macro_export]
+macro_rules! assert_rel_eq_arr2 {
+    ($actual:expr, $expected:expr) => {
+        assert_eq!($actual.shape(), $expected.shape());
+        ndarray::Zip::from(&$actual)
+            .and(&$expected)
+            .for_each(|v, w| {
+                assert_relative_eq!(v, w);
+            });
+    };
 }
