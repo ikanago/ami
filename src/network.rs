@@ -1,4 +1,4 @@
-use ndarray::{Array, Array2, ArrayView2};
+use ndarray::{Array, Array2, ArrayView2, Axis};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 
@@ -24,7 +24,7 @@ impl Linear {
         activation: Sigmoid,
         weights: Array2<f64>,
     ) -> Self {
-        let inputs = Array2::zeros((input_dim, 1));
+        let inputs = Array2::zeros((input_dim + 1, 1));
         let dot_products = Array2::zeros((output_dim, 1));
         let outputs = Array2::zeros((output_dim, 1));
         Self {
@@ -37,6 +37,10 @@ impl Linear {
     }
 
     pub fn forward(&mut self, inputs: Array2<f64>) -> ArrayView2<f64> {
+        let ones = Array::<f64, _>::ones((1, 1));
+        let mut inputs = inputs;
+        inputs.append(Axis(0), ones.view()).unwrap();
+
         self.inputs = inputs;
         self.dot_products = self.weights.dot(&self.inputs);
         self.outputs = self.activation.compute(&self.dot_products);
@@ -62,11 +66,11 @@ mod tests {
 
     #[test]
     fn layer_forward() {
-        let weights = arr2(&[[1.0, -1.0, 0.5], [2.0, -1.0, 2.0]]);
+        let weights = arr2(&[[1.0, -1.0, 0.5, -2.0], [2.0, -1.0, 2.0, -0.5]]);
         let mut layer = Linear::with_weights(3, 2, Sigmoid, weights);
         let inputs = arr2(&[[1.0], [0.5], [-0.5]]);
         let outputs = layer.forward(inputs);
-        assert_rel_eq_arr2!(outputs, arr2(&[[0.5621765008857981], [0.6224593312018546]]));
+        assert_rel_eq_arr2!(outputs, arr2(&[[0.1480471980316895], [0.5]]));
 
         let train = arr2(&[[1.0], [0.0]]);
         let error = train - outputs;
@@ -75,17 +79,23 @@ mod tests {
         assert_rel_eq_arr2!(
             dz,
             arr2(&[
-                [-0.1847972216984755],
-                [0.0385169681715178],
-                [-0.2386788643761953]
+                [-0.1425438531921371],
+                [0.0175438531921371],
+                [-0.1962719265960686],
+                [-0.1524122936157258],
             ])
         );
 
         assert_rel_eq_arr2!(
             dw,
             arr2(&[
-                [0.1077632853554398, 0.0538816426777199, -0.0538816426777199,],
-                [-0.1462802535269576, -0.0731401267634788, 0.0731401267634788,]
+                [
+                    0.1074561468078629,
+                    0.0537280734039314,
+                    -0.0537280734039314,
+                    0.1074561468078629
+                ],
+                [-0.125, -0.0625, 0.0625, -0.125],
             ])
         );
     }
