@@ -50,8 +50,10 @@ impl Linear {
     pub fn backward(&mut self, errors: &ArrayView2<f64>) -> (Array2<f64>, Array2<f64>) {
         let activation_derivative = self.activation.derivative(&self.dot_products);
         let dot_products_derivative = activation_derivative * errors;
-        let inputs_derivative = self.weights.t().dot(&dot_products_derivative);
+        let mut inputs_derivative = self.weights.t().dot(&dot_products_derivative);
         let weights_derivative = dot_products_derivative.dot(&self.inputs.t());
+
+        inputs_derivative.remove_index(Axis(0), inputs_derivative.nrows() - 1);
         (inputs_derivative, weights_derivative)
     }
 }
@@ -82,7 +84,6 @@ mod tests {
                 [-0.1425438531921371],
                 [0.0175438531921371],
                 [-0.1962719265960686],
-                [-0.1524122936157258],
             ])
         );
 
