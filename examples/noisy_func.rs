@@ -1,9 +1,9 @@
 use ami::{
-    activation::{Activation, Identity, Sigmoid},
+    activation::{Identity, Relu},
     layer::Linear,
     network::Network,
 };
-use ndarray::{arr2, s, Array, Array1, Array2, ArrayView2, Axis};
+use ndarray::{s, Array2, ArrayView2, Axis};
 use ndarray_rand::{
     rand::{thread_rng, Rng},
     rand_distr::{Distribution, Normal, Uniform},
@@ -11,9 +11,10 @@ use ndarray_rand::{
 
 // x: (batch_size, input_size)
 fn func(x: ArrayView2<f64>) -> Array2<f64> {
-    x.map_axis(Axis(1), |v| 2.0 + 5.0 * v[[0]] + -3.0 * v[[1]] + 4.0 * v[[2]].powi(2))
-    // x.map_axis(Axis(1), |v| 5.0 * v[[0]] + -3.0)
-        .insert_axis(Axis(1))
+    x.map_axis(Axis(1), |v| {
+        2.0 + 5.0 * v[[0]] + -3.0 * v[[1]].sin() + 4.0 * v[[2]].powi(2)
+    })
+    .insert_axis(Axis(1))
 }
 
 fn generate_noise(variance: f64, length: usize, mut rng: &mut impl Rng) -> Array2<f64> {
@@ -58,11 +59,11 @@ fn main() {
     dbg!(&y_train);
 
     let batch_size = 16;
-    let mut network = Network::new(0.05);
-    network.add_layer(Linear::new(x_train.ncols(), 4, batch_size, Sigmoid));
+    let mut network = Network::new(0.001);
+    network.add_layer(Linear::new(x_train.ncols(), 4, batch_size, Relu));
     network.add_layer(Linear::new(4, y_train.ncols(), batch_size, Identity));
 
-    let epochs = 1000;
+    let epochs = 3000;
     for epoch in 0..epochs {
         let mut has_processed = 0;
         let mut total_loss = 0.0;
@@ -85,7 +86,6 @@ fn main() {
             network.backward(error);
             has_processed += batch_size;
         }
-        // dbg!(mse(y_train.view(), network.forward(x_train.clone()).view()));
         let mean_loss = total_loss / n_iters as f64;
         println!(" mean loss: {}", mean_loss);
     }
