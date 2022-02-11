@@ -1,17 +1,37 @@
 use ndarray::Array2;
 
+pub trait Activation {
+    fn compute(&self, x: &Array2<f64>) -> Array2<f64>;
+
+    fn derivative(&self, x: &Array2<f64>) -> Array2<f64>;
+}
+
+pub struct Identity;
+
+impl Activation for Identity {
+    fn compute(&self, x: &Array2<f64>) -> Array2<f64> {
+        x.clone()
+    }
+
+    fn derivative(&self, x: &Array2<f64>) -> Array2<f64> {
+        x.map(|_| 1.0)
+    }
+}
+
 pub struct Sigmoid;
 
 impl Sigmoid {
     fn compute_one(x: &f64) -> f64 {
         1.0 / (1.0 + (-x).exp())
     }
+}
 
-    pub fn compute(&self, x: &Array2<f64>) -> Array2<f64> {
+impl Activation for Sigmoid {
+    fn compute(&self, x: &Array2<f64>) -> Array2<f64> {
         x.map(Sigmoid::compute_one)
     }
 
-    pub fn derivative(&self, x: &Array2<f64>) -> Array2<f64> {
+    fn derivative(&self, x: &Array2<f64>) -> Array2<f64> {
         x.map(|v| {
             let w = Sigmoid::compute_one(v);
             w * (1.0 - w)

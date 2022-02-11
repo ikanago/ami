@@ -2,32 +2,32 @@ use ndarray::{Array, Array2, Axis};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 
-use crate::activation::Sigmoid;
+use crate::activation::Activation;
 
 pub struct Linear {
     inputs: Array2<f64>,
     weights: Array2<f64>,
     dot_products: Array2<f64>,
     outputs: Array2<f64>,
-    activation: Sigmoid,
+    activation: Box<dyn Activation>,
 }
 
 impl Linear {
-    pub fn new(
+    pub fn new<A: Activation + 'static>(
         input_dim: usize,
         output_dim: usize,
         batch_size: usize,
-        activation: Sigmoid,
+        activation: A,
     ) -> Self {
         let weights = Array::random((input_dim + 1, output_dim), Uniform::new(0.0, 1.0));
         Linear::with_weights(input_dim, output_dim, batch_size, activation, weights)
     }
 
-    pub fn with_weights(
+    pub fn with_weights<A: Activation + 'static>(
         input_dim: usize,
         output_dim: usize,
         batch_size: usize,
-        activation: Sigmoid,
+        activation: A,
         weights: Array2<f64>,
     ) -> Self {
         let inputs = Array2::zeros((batch_size, input_dim + 1));
@@ -38,7 +38,7 @@ impl Linear {
             weights,
             dot_products,
             outputs,
-            activation,
+            activation: Box::new(activation),
         }
     }
 
@@ -72,7 +72,7 @@ impl Linear {
 
 #[cfg(test)]
 mod tests {
-    use crate::assert_rel_eq_arr2;
+    use crate::{activation::Sigmoid, assert_rel_eq_arr2};
 
     use super::*;
     use approx::assert_relative_eq;

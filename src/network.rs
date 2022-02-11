@@ -32,6 +32,7 @@ impl Network {
         for layer in self.layers.iter_mut().rev() {
             let (dx, dw) = layer.backward(inputs_derivative);
             inputs_derivative = dx;
+            // dbg!(&dw);
             layer.update_weights(self.learning_rate, dw);
         }
     }
