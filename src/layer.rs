@@ -19,7 +19,7 @@ impl Linear {
         batch_size: usize,
         activation: Sigmoid,
     ) -> Self {
-        let weights = Array::random((output_dim, input_dim), Uniform::new(0.0, 1.0));
+        let weights = Array::random((input_dim + 1, output_dim), Uniform::new(0.0, 1.0));
         Linear::with_weights(input_dim, output_dim, batch_size, activation, weights)
     }
 

@@ -29,7 +29,7 @@ impl Network {
 
     pub fn backward(&mut self, error: Array2<f64>) {
         let mut inputs_derivative = error;
-        for layer in self.layers.iter_mut() {
+        for layer in self.layers.iter_mut().rev() {
             let (dx, dw) = layer.backward(inputs_derivative);
             inputs_derivative = dx;
             layer.update_weights(self.learning_rate, dw);
