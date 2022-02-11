@@ -1,7 +1,7 @@
 use ami::{
     activation::{Identity, Relu},
     layer::Linear,
-    loss::{Loss, MeanSquaredError},
+    loss::{LossCriterion, MeanSquaredError},
     network::Network,
 };
 use ndarray::{s, Array2, ArrayView2, Axis};

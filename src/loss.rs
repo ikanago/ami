@@ -1,6 +1,6 @@
-use ndarray::{Array2, ArrayView2, Zip};
+use ndarray::{Array1, Array2, ArrayView2, Zip};
 
-pub trait Loss {
+pub trait LossCriterion {
     fn compute(input: ArrayView2<f64>, target: ArrayView2<f64>) -> Self;
 
     fn value(&self) -> f64;
@@ -8,13 +8,14 @@ pub trait Loss {
     fn grad(&self) -> Array2<f64>;
 }
 
+/// Computes mean squared error over a batch and elements for each data.
 pub struct MeanSquaredError {
     input: Array2<f64>,
     target: Array2<f64>,
     value: f64,
 }
 
-impl Loss for MeanSquaredError {
+impl LossCriterion for MeanSquaredError {
     fn compute(input: ArrayView2<f64>, target: ArrayView2<f64>) -> Self {
         assert_eq!(input.len(), target.len());
 
@@ -43,14 +44,37 @@ impl Loss for MeanSquaredError {
     }
 }
 
+fn softmax(x: &Array1<f64>) -> Array1<f64> {
+    let max_element = x.iter().fold(f64::NAN, |v, &w| v.max(w));
+    let exp_each = x.map(|v| (v - max_element).exp());
+    let exp_sum = exp_each.sum();
+    exp_each / exp_sum
+}
+
+pub struct SoftmaxCrossEntropy {
+    input: Array2<f64>,
+    target: Array2<f64>,
+    value: f64,
+}
+
+/*
+impl LossCriterion for SoftmaxCrossEntropy {
+    fn compute(input: ArrayView2<f64>, target: ArrayView2<f64>) -> Self {
+        let loss = Zip::from(input.rows()).and(target.rows()).fold(0.0, |loss, input, target| {
+            loss + target + input
+        });
+    }
+}
+*/
+
 #[cfg(test)]
 mod tests {
-    use crate::assert_rel_eq_arr2;
+    use crate::{assert_rel_eq_arr1, assert_rel_eq_arr2};
 
     use super::*;
 
     use approx::assert_relative_eq;
-    use ndarray::arr2;
+    use ndarray::{arr1, arr2};
 
     fn prepare_mse() -> MeanSquaredError {
         let input = arr2(&[[1.0, 0.5, -0.1], [0.5, 0.2, 1.0]]);
@@ -73,6 +97,22 @@ mod tests {
                 [0.0, 0.0833333333333333, -0.0166666666666667],
                 [0.0833333333333333, -0.1333333333333333, 0.1666666666666667]
             ])
+        );
+    }
+
+    #[test]
+    fn compute_softmax() {
+        let x = arr1(&[1.0, 0.5, -0.1, 0.5, 0.2, 3.0]);
+        assert_rel_eq_arr1!(
+            arr1(&[
+                0.0962990589663384,
+                0.058408331764559,
+                0.0320551721172303,
+                0.058408331764559,
+                0.0432699564108081,
+                0.7115591489765052
+            ]),
+            softmax(&x)
         );
     }
 }
