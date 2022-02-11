@@ -6,8 +6,8 @@ use std::path::Path;
 fn convert_iris_kinds_to_one_hot(kind: &str) -> Vec<f64> {
     match kind {
         "Iris-setosa" => vec![1.0, 0.0, 0.0],
-        "Iris-versicolor" =>  vec![0.0, 1.0, 0.0],
-        "Iris-virginica" =>  vec![0.0, 0.0, 1.0],
+        "Iris-versicolor" => vec![0.0, 1.0, 0.0],
+        "Iris-virginica" => vec![0.0, 0.0, 1.0],
         _ => panic!("Unknown iris kind: {}", kind),
     }
 }
