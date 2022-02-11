@@ -1,6 +1,6 @@
 use ndarray::Array2;
 
-use crate::layer::Linear;
+use crate::{layer::Linear, loss::Loss};
 
 pub struct Network {
     layers: Vec<Linear>,
@@ -27,8 +27,8 @@ impl Network {
         outputs
     }
 
-    pub fn backward(&mut self, error: Array2<f64>) {
-        let mut inputs_derivative = error;
+    pub fn backward<L: Loss>(&mut self, loss: L) {
+        let mut inputs_derivative = loss.grad();
         for layer in self.layers.iter_mut().rev() {
             let (dx, dw) = layer.backward(inputs_derivative);
             inputs_derivative = dx;

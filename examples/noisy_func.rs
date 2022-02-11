@@ -1,6 +1,7 @@
 use ami::{
     activation::{Identity, Relu},
     layer::Linear,
+    loss::{Loss, MeanSquaredError},
     network::Network,
 };
 use ndarray::{s, Array2, ArrayView2, Axis};
@@ -48,10 +49,6 @@ fn generate_data(
         .to_owned()
 }
 
-fn mse(y: ArrayView2<f64>, y_hat: ArrayView2<f64>) -> f64 {
-    (y.to_owned() - y_hat).map(|v| v.powi(2)).mean().unwrap()
-}
-
 fn main() {
     let mut rng = thread_rng();
     let x_train = generate_data(160, 3, -10.0, 10.0, &mut rng);
@@ -80,10 +77,10 @@ fn main() {
                 .slice(s![has_processed..(has_processed + batch_size), ..])
                 .to_owned();
             let y_hat = network.forward(x_train_batch);
-            let loss = mse(y_train_batch.view(), y_hat.view());
+            let loss_criterion = MeanSquaredError::compute(y_hat.view(), y_train_batch.view());
+            let loss = loss_criterion.value();
             total_loss += loss;
-            let error = (y_hat - y_train_batch) / batch_size as f64;
-            network.backward(error);
+            network.backward(loss_criterion);
             has_processed += batch_size;
         }
         let mean_loss = total_loss / n_iters as f64;
