@@ -2,6 +2,7 @@ pub mod activation;
 pub mod layer;
 pub mod loss;
 pub mod network;
+pub mod util;
 
 #[macro_export]
 macro_rules! assert_rel_eq_arr1 {
