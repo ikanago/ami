@@ -1,8 +1,17 @@
-[workspace]
-members = [
-    "ami",
-    "kabuki",
-]
+[package]
+name = "ami"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ndarray = "0.15.4"
+ndarray-rand = "0.14.0"
+
+[dev-dependencies]
+approx = "0.5.1"
+csv = "1.1.6"
 
 [profile.dev]
 debug = 0
