@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{Dimension, Zip};
 
-use crate::grad::{send_gradient, Tensor, Function};
+use crate::grad::{send_gradient, Function, Tensor};
 
 pub fn mul<D, Lhs, Rhs>(lhs: &Rc<Lhs>, rhs: &Rc<Rhs>) -> Rc<Multiplication<D, Lhs, Rhs>>
 where
