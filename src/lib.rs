@@ -1,4 +1,5 @@
 pub mod activation;
+pub mod grad;
 pub mod layer;
 pub mod loss;
 pub mod network;

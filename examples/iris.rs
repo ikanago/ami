@@ -34,7 +34,7 @@ fn load_iris(file_path: impl AsRef<Path>) -> (Array2<f64>, Array2<f64>) {
 }
 
 fn main() {
-    let mut network = Network::new(0.5);
+    let mut _network = Network::new(0.5);
     let (xs, ys) = load_iris("./IRIS.csv");
     dbg!(xs);
     dbg!(ys);
