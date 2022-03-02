@@ -148,4 +148,18 @@ mod tests {
         z.backward();
         assert_rel_eq_arr2!(arr2(&[[3.0, 3.0], [12.0, 27.0]]), x.gradient().clone());
     }
+
+    #[test]
+    fn grad_wrt_const_is_zero() {
+        let x = Rc::new(Variable::new(arr2(&[[1.0, 0.0], [2.0, -1.0]])).requires_grad());
+        let a = Rc::new(Variable::new(arr2(&[[1.0, 1.0], [3.0, -2.0]])));
+        let z = mul(&x, &a);
+        z.forward();
+        assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [6.0, 2.0]]), z.data().clone());
+
+        z.init_grad();
+        z.backward();
+        assert_rel_eq_arr2!(arr2(&[[0.0, 0.0], [0.0, 0.0]]), a.gradient().clone());
+        assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [3.0, -2.0]]), x.gradient().clone());
+    }
 }

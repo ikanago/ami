@@ -42,11 +42,11 @@ where
     D: Dimension,
 {
     pub fn new(data: Tensor<D>) -> Self {
-        let dim = data.raw_dim();
+        let shape = data.raw_dim();
 
         Self {
             data: RefCell::new(data),
-            gradient: RefCell::new(Tensor::zeros(dim)),
+            gradient: RefCell::new(Tensor::zeros(shape)),
             requires_grad: false,
         }
     }
@@ -76,7 +76,13 @@ impl<D: Dimension> Function for Variable<D> {
 
     fn forward(&self) {}
 
-    fn backward(&self) {}
+    fn backward(&self) {
+        // Work around to handle variables which does not require grad.
+        if !self.requires_grad {
+            let shape = self.gradient.borrow().raw_dim();
+            *self.gradient.borrow_mut() = Tensor::zeros(shape);
+        }
+    }
 }
 
 pub(crate) fn send_gradient<'a, F, P>(node: &F, gradient: P)
