@@ -62,7 +62,7 @@ where
         self.data.borrow()
     }
 
-    fn gradient(&self) -> Ref<Tensor<D>> {
+    fn gradient(&self) -> Ref<Tensor<Self::Dim>> {
         self.gradient.borrow()
     }
 

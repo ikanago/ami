@@ -1,6 +1,7 @@
 pub mod addition;
 pub mod matmul;
 pub mod mul;
+pub mod relu;
 
 use std::{
     cell::{Ref, RefCell, RefMut},
