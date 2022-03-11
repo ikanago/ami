@@ -48,6 +48,8 @@ where
         }
     }
 
+    /// Initialize gradient with the tensor whose elements are all 1.0.
+    /// This is called when the struct instance is the root of the computation graph.
     pub fn init_grad(&self) {
         *self.gradient.borrow_mut() = Tensor::ones(self.lhs.data().raw_dim());
     }

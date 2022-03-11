@@ -1,3 +1,4 @@
+pub mod matmul;
 pub mod mul;
 
 use std::cell::{Ref, RefCell, RefMut};
