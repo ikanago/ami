@@ -2,6 +2,7 @@ pub mod addition;
 pub mod matmul;
 pub mod mul;
 pub mod relu;
+pub mod sigmoid;
 
 use std::{
     cell::{Ref, RefCell, RefMut},
