@@ -41,11 +41,6 @@ where
             gradient: Rc::new(RefCell::new(Tensor::zeros(shape))),
         }
     }
-
-    pub fn init_grad(&self) {
-        let shape = self.gradient().raw_dim();
-        *self.gradient.borrow_mut() = Tensor::ones(shape);
-    }
 }
 
 impl<Lhs, Rhs> Function for MatrixMultiplication<Lhs, Rhs>

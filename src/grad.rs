@@ -18,6 +18,13 @@ pub trait Function: Clone {
     /// Return the reference to this node's value which has computed in forward path for given inputs.
     fn data(&self) -> Ref<Tensor<Self::Dim>>;
 
+    /// Initialize gradient with the tensor whose elements are all 1.0.
+    /// This is called when the struct instance is the root of the computation graph.
+    fn init_grad(&self) {
+        let shape = self.gradient().raw_dim();
+        *self.gradient_mut() = Tensor::ones(shape);
+    }
+
     /// Return the reference to the gradient of the whole function with respect to this node.
     fn gradient(&self) -> Ref<Tensor<Self::Dim>>;
 

@@ -23,7 +23,7 @@ where
     Lhs: Function,
     Rhs: Function,
 {
-    // TODO: this cannot restrict the dimentionality of rhs.
+    // TODO: this cannot restrict the shape of rhs.
     data: Rc<RefCell<Tensor<D>>>,
     lhs: Lhs,
     rhs: Rhs,
@@ -47,12 +47,6 @@ where
             gradient: Rc::new(RefCell::new(Tensor::zeros(lhs.data().raw_dim()))),
             buffer_for_backward: RefCell::new(Tensor::zeros(lhs.data().raw_dim())),
         }
-    }
-
-    /// Initialize gradient with the tensor whose elements are all 1.0.
-    /// This is called when the struct instance is the root of the computation graph.
-    pub fn init_grad(&self) {
-        *self.gradient.borrow_mut() = Tensor::ones(self.lhs.data().raw_dim());
     }
 }
 
