@@ -1,3 +1,4 @@
+pub mod addition;
 pub mod matmul;
 pub mod mul;
 
