@@ -1,6 +1,10 @@
+pub mod matmul;
 pub mod mul;
 
-use std::cell::{Ref, RefCell, RefMut};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    rc::Rc,
+};
 
 use ndarray::{Array, ArrayView, Dimension, IntoNdProducer, Zip};
 
@@ -8,11 +12,18 @@ pub type Tensor<D> = Array<f32, D>;
 
 /// Trait to represent a computational graph of a function to be diffrentiated.
 /// All node in the graph implements this trait.
-pub trait Function {
+pub trait Function: Clone {
     type Dim: Dimension;
 
     /// Return the reference to this node's value which has computed in forward path for given inputs.
     fn data(&self) -> Ref<Tensor<Self::Dim>>;
+
+    /// Initialize gradient with the tensor whose elements are all 1.0.
+    /// This is called when the struct instance is the root of the computation graph.
+    fn init_grad(&self) {
+        let shape = self.gradient().raw_dim();
+        *self.gradient_mut() = Tensor::ones(shape);
+    }
 
     /// Return the reference to the gradient of the whole function with respect to this node.
     fn gradient(&self) -> Ref<Tensor<Self::Dim>>;
@@ -32,8 +43,8 @@ pub trait Function {
 /// To diffrentiate, call `requires_grad()`.
 #[derive(Clone)]
 pub struct Variable<D> {
-    data: RefCell<Tensor<D>>,
-    gradient: RefCell<Tensor<D>>,
+    data: Rc<RefCell<Tensor<D>>>,
+    gradient: Rc<RefCell<Tensor<D>>>,
     requires_grad: bool,
 }
 
@@ -45,8 +56,8 @@ where
         let shape = data.raw_dim();
 
         Self {
-            data: RefCell::new(data),
-            gradient: RefCell::new(Tensor::zeros(shape)),
+            data: Rc::new(RefCell::new(data)),
+            gradient: Rc::new(RefCell::new(Tensor::zeros(shape))),
             requires_grad: false,
         }
     }
