@@ -7,23 +7,24 @@ use ndarray::{linalg::general_mat_mul, Ix2};
 
 use crate::grad::{send_gradient, Function, Tensor};
 
-pub fn matmul<Lhs, Rhs>(lhs: &Rc<Lhs>, rhs: &Rc<Rhs>) -> Rc<MatrixMultiplication<Lhs, Rhs>>
+pub fn matmul<Lhs, Rhs>(lhs: &Lhs, rhs: &Rhs) -> MatrixMultiplication<Lhs, Rhs>
 where
     Lhs: Function<Dim = Ix2>,
     Rhs: Function<Dim = Ix2>,
 {
-    Rc::new(MatrixMultiplication::new(lhs, rhs))
+    MatrixMultiplication::new(lhs, rhs)
 }
 
+#[derive(Clone)]
 pub struct MatrixMultiplication<Lhs, Rhs>
 where
     Lhs: Function,
     Rhs: Function,
 {
-    data: RefCell<Tensor<Ix2>>,
-    lhs: Rc<Lhs>,
-    rhs: Rc<Rhs>,
-    gradient: RefCell<Tensor<Ix2>>,
+    data: Rc<RefCell<Tensor<Ix2>>>,
+    lhs: Lhs,
+    rhs: Rhs,
+    gradient: Rc<RefCell<Tensor<Ix2>>>,
 }
 
 impl<Lhs, Rhs> MatrixMultiplication<Lhs, Rhs>
@@ -31,12 +32,13 @@ where
     Lhs: Function<Dim = Ix2>,
     Rhs: Function<Dim = Ix2>,
 {
-    pub fn new(lhs: &Rc<Lhs>, rhs: &Rc<Rhs>) -> Self {
+    pub fn new(lhs: &Lhs, rhs: &Rhs) -> Self {
+        let shape = (lhs.data().nrows(), rhs.data().ncols());
         Self {
-            data: RefCell::new(Tensor::zeros((lhs.data().nrows(), rhs.data().ncols()))),
-            lhs: Rc::clone(lhs),
-            rhs: Rc::clone(rhs),
-            gradient: RefCell::new(Tensor::zeros((lhs.data().nrows(), rhs.data().ncols()))),
+            data: Rc::new(RefCell::new(Tensor::zeros(shape))),
+            lhs: lhs.clone(),
+            rhs: rhs.clone(),
+            gradient: Rc::new(RefCell::new(Tensor::zeros(shape))),
         }
     }
 
@@ -79,7 +81,7 @@ where
 
     fn backward(&self) {
         let lhs_grad = self.gradient().dot(&self.rhs.data().t());
-        send_gradient(self.lhs.as_ref(), &lhs_grad);
+        send_gradient(&self.lhs, &lhs_grad);
 
         // Use `general_mat_mul` because we have to move transposed matrix when computing dot
         // product.
@@ -91,7 +93,7 @@ where
             1.0,
             &mut rhs_grad,
         );
-        send_gradient(self.rhs.as_ref(), &rhs_grad);
+        send_gradient(&self.rhs, &rhs_grad);
 
         self.lhs.backward();
         self.rhs.backward();
@@ -113,8 +115,8 @@ mod tests {
         let w = arr2(&[[-1.0, 3.0, 2.0], [4.0, 1.0, 0.5]]);
         let expected = x.dot(&w);
 
-        let x = Rc::new(Variable::new(x).requires_grad());
-        let w = Rc::new(Variable::new(w).requires_grad());
+        let x = Variable::new(x).requires_grad();
+        let w = Variable::new(w).requires_grad();
         let z = matmul(&x, &w);
         z.forward();
         assert_rel_eq_arr2!(z.data().clone(), expected);
@@ -122,9 +124,8 @@ mod tests {
 
     #[test]
     fn backward_matmul() {
-        let x =
-            Rc::new(Variable::new(arr2(&[[1.0, 2.0], [-1.0, 3.0], [1.0, -1.0]])).requires_grad());
-        let w = Rc::new(Variable::new(arr2(&[[-1.0, 3.0, 2.0], [4.0, 1.0, 0.5]])).requires_grad());
+        let x = Variable::new(arr2(&[[1.0, 2.0], [-1.0, 3.0], [1.0, -1.0]])).requires_grad();
+        let w = Variable::new(arr2(&[[-1.0, 3.0, 2.0], [4.0, 1.0, 0.5]])).requires_grad();
         let z = matmul(&x, &w);
         z.forward();
 

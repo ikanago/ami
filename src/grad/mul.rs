@@ -7,15 +7,16 @@ use ndarray::{Dimension, Zip};
 
 use crate::grad::{send_gradient, Function, Tensor};
 
-pub fn mul<D, Lhs, Rhs>(lhs: &Rc<Lhs>, rhs: &Rc<Rhs>) -> Rc<Multiplication<D, Lhs, Rhs>>
+pub fn mul<D, Lhs, Rhs>(lhs: &Lhs, rhs: &Rhs) -> Multiplication<D, Lhs, Rhs>
 where
     D: Dimension,
     Lhs: Function<Dim = D>,
     Rhs: Function<Dim = D>,
 {
-    Rc::new(Multiplication::new(lhs, rhs))
+    Multiplication::new(lhs, rhs)
 }
 
+#[derive(Clone)]
 pub struct Multiplication<D, Lhs, Rhs>
 where
     D: Dimension,
@@ -23,10 +24,10 @@ where
     Rhs: Function,
 {
     // TODO: this cannot restrict the dimentionality of rhs.
-    data: RefCell<Tensor<D>>,
-    lhs: Rc<Lhs>,
-    rhs: Rc<Rhs>,
-    gradient: RefCell<Tensor<D>>,
+    data: Rc<RefCell<Tensor<D>>>,
+    lhs: Lhs,
+    rhs: Rhs,
+    gradient: Rc<RefCell<Tensor<D>>>,
     buffer_for_backward: RefCell<Tensor<D>>,
 }
 
@@ -36,14 +37,14 @@ where
     Lhs: Function<Dim = D>,
     Rhs: Function<Dim = D>,
 {
-    pub fn new(lhs: &Rc<Lhs>, rhs: &Rc<Rhs>) -> Self {
+    pub fn new(lhs: &Lhs, rhs: &Rhs) -> Self {
         assert_eq!(lhs.data().shape(), rhs.data().shape());
 
         Self {
-            data: RefCell::new(Tensor::zeros(lhs.data().raw_dim())),
-            lhs: Rc::clone(lhs),
-            rhs: Rc::clone(rhs),
-            gradient: RefCell::new(Tensor::zeros(lhs.data().raw_dim())),
+            data: Rc::new(RefCell::new(Tensor::zeros(lhs.data().raw_dim()))),
+            lhs: lhs.clone(),
+            rhs: rhs.clone(),
+            gradient: Rc::new(RefCell::new(Tensor::zeros(lhs.data().raw_dim()))),
             buffer_for_backward: RefCell::new(Tensor::zeros(lhs.data().raw_dim())),
         }
     }
@@ -90,13 +91,13 @@ where
             .and(&*self.gradient())
             .and(&*self.rhs.data())
             .for_each(|buffer, grad, rhs| *buffer = grad * rhs);
-        send_gradient(self.lhs.as_ref(), &*self.buffer_for_backward.borrow());
+        send_gradient(&self.lhs, &*self.buffer_for_backward.borrow());
 
         Zip::from(&mut *self.buffer_for_backward.borrow_mut())
             .and(&*self.gradient())
             .and(&*self.lhs.data())
             .for_each(|buffer, grad, lhs| *buffer = grad * lhs);
-        send_gradient(self.rhs.as_ref(), &*self.buffer_for_backward.borrow());
+        send_gradient(&self.rhs, &*self.buffer_for_backward.borrow());
 
         self.lhs.backward();
         self.rhs.backward();
@@ -114,8 +115,8 @@ mod tests {
 
     #[test]
     fn var_mul_var() {
-        let x = Rc::new(Variable::new(arr2(&[[1.0, 0.0], [2.0, -1.0]])).requires_grad());
-        let y = Rc::new(Variable::new(arr2(&[[1.0, 1.0], [3.0, -2.0]])).requires_grad());
+        let x = Variable::new(arr2(&[[1.0, 0.0], [2.0, -1.0]])).requires_grad();
+        let y = Variable::new(arr2(&[[1.0, 1.0], [3.0, -2.0]])).requires_grad();
         let z = mul(&x, &y);
         z.forward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [6.0, 2.0]]), z.data().clone());
@@ -127,7 +128,7 @@ mod tests {
 
     #[test]
     fn power_of_2() {
-        let x = Rc::new(Variable::new(arr2(&[[1.0, -1.0], [2.0, -3.0]])).requires_grad());
+        let x = Variable::new(arr2(&[[1.0, -1.0], [2.0, -3.0]])).requires_grad();
         let z = mul(&x, &x);
         z.forward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [4.0, 9.0]]), z.data().clone());
@@ -139,7 +140,7 @@ mod tests {
 
     #[test]
     fn nested_power_of_3() {
-        let x = Rc::new(Variable::new(arr2(&[[1.0, -1.0], [2.0, -3.0]])).requires_grad());
+        let x = Variable::new(arr2(&[[1.0, -1.0], [2.0, -3.0]])).requires_grad();
         let y = mul(&x, &x);
         let z = mul(&x, &y);
         z.forward();
@@ -153,8 +154,8 @@ mod tests {
 
     #[test]
     fn grad_wrt_const_is_zero() {
-        let x = Rc::new(Variable::new(arr2(&[[1.0, 0.0], [2.0, -1.0]])).requires_grad());
-        let a = Rc::new(Variable::new(arr2(&[[1.0, 1.0], [3.0, -2.0]])));
+        let x = Variable::new(arr2(&[[1.0, 0.0], [2.0, -1.0]])).requires_grad();
+        let a = Variable::new(arr2(&[[1.0, 1.0], [3.0, -2.0]]));
         let z = mul(&x, &a);
         z.forward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [6.0, 2.0]]), z.data().clone());
