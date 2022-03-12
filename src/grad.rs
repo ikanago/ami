@@ -103,13 +103,24 @@ impl<D: Dimension> Function for Variable<D> {
         self.gradient.borrow_mut()
     }
 
+    fn update_gradient<'a, P>(&self, gradient: P)
+    where
+        P: IntoNdProducer<
+            Dim = Self::GradDim,
+            Output = ArrayView<'a, f32, Self::GradDim>,
+            Item = &'a f32,
+        >,
+    {
+        if !self.requires_grad {
+            return;
+        }
+
+        Zip::from(&mut *self.gradient_mut())
+            .and(gradient.into_producer())
+            .for_each(|grad, &incoming| *grad += incoming);
+    }
+
     fn forward(&self) {}
 
-    fn backward(&self) {
-        // Work around to handle variables which does not require grad.
-        if !self.requires_grad {
-            let shape = self.gradient.borrow().raw_dim();
-            *self.gradient.borrow_mut() = Tensor::zeros(shape);
-        }
-    }
+    fn backward(&self) {}
 }
