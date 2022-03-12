@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{Dimension, Zip};
 
-use crate::grad::{send_gradient, Function, Tensor};
+use crate::grad::{Function, Tensor};
 
 pub fn mul<D, Lhs, Rhs>(lhs: &Lhs, rhs: &Rhs) -> Multiplication<D, Lhs, Rhs>
 where
@@ -53,20 +53,21 @@ where
 impl<D, Lhs, Rhs> Function for Multiplication<D, Lhs, Rhs>
 where
     D: Dimension,
-    Lhs: Function<Dim = D>,
-    Rhs: Function<Dim = D>,
+    Lhs: Function<Dim = D, GradDim = D>,
+    Rhs: Function<Dim = D, GradDim = D>,
 {
     type Dim = D;
+    type GradDim = D;
 
     fn data(&self) -> Ref<Tensor<Self::Dim>> {
         self.data.borrow()
     }
 
-    fn gradient(&self) -> Ref<Tensor<Self::Dim>> {
+    fn gradient(&self) -> Ref<Tensor<Self::GradDim>> {
         self.gradient.borrow()
     }
 
-    fn gradient_mut(&self) -> RefMut<Tensor<Self::Dim>> {
+    fn gradient_mut(&self) -> RefMut<Tensor<Self::GradDim>> {
         self.gradient.borrow_mut()
     }
 
@@ -85,13 +86,15 @@ where
             .and(&*self.gradient())
             .and(&*self.rhs.data())
             .for_each(|buffer, grad, rhs| *buffer = grad * rhs);
-        send_gradient(&self.lhs, &*self.buffer_for_backward.borrow());
+        self.lhs
+            .update_gradient(&*self.buffer_for_backward.borrow());
 
         Zip::from(&mut *self.buffer_for_backward.borrow_mut())
             .and(&*self.gradient())
             .and(&*self.lhs.data())
             .for_each(|buffer, grad, lhs| *buffer = grad * lhs);
-        send_gradient(&self.rhs, &*self.buffer_for_backward.borrow());
+        self.rhs
+            .update_gradient(&*self.buffer_for_backward.borrow());
 
         self.lhs.backward();
         self.rhs.backward();
@@ -115,7 +118,7 @@ mod tests {
         z.forward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [6.0, 2.0]]), z.data().clone());
 
-        z.init_grad();
+        z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [2.0, -1.0]]), y.gradient().clone());
     }
@@ -127,7 +130,7 @@ mod tests {
         z.forward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [4.0, 9.0]]), z.data().clone());
 
-        z.init_grad();
+        z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(arr2(&[[2.0, -2.0], [4.0, -6.0]]), x.gradient().clone());
     }
@@ -141,7 +144,7 @@ mod tests {
         assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [4.0, 9.0]]), y.data().clone());
         assert_rel_eq_arr2!(arr2(&[[1.0, -1.0], [8.0, -27.0]]), z.data().clone());
 
-        z.init_grad();
+        z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(arr2(&[[3.0, 3.0], [12.0, 27.0]]), x.gradient().clone());
     }
@@ -154,7 +157,7 @@ mod tests {
         z.forward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [6.0, 2.0]]), z.data().clone());
 
-        z.init_grad();
+        z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(arr2(&[[0.0, 0.0], [0.0, 0.0]]), a.gradient().clone());
         assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [3.0, -2.0]]), x.gradient().clone());

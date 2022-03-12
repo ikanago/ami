@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{Dimension, Zip};
 
-use crate::grad::{send_gradient, Function, Tensor};
+use crate::grad::{Function, Tensor};
 
 pub fn add<D, Lhs, Rhs>(lhs: &Lhs, rhs: &Rhs) -> Addition<D, Lhs, Rhs>
 where
@@ -53,20 +53,21 @@ where
 impl<D, Lhs, Rhs> Function for Addition<D, Lhs, Rhs>
 where
     D: Dimension,
-    Lhs: Function<Dim = D>,
-    Rhs: Function<Dim = D>,
+    Lhs: Function<Dim = D, GradDim = D>,
+    Rhs: Function<Dim = D, GradDim = D>,
 {
     type Dim = D;
+    type GradDim = D;
 
     fn data(&self) -> Ref<Tensor<Self::Dim>> {
         self.data.borrow()
     }
 
-    fn gradient(&self) -> Ref<Tensor<D>> {
+    fn gradient(&self) -> Ref<Tensor<Self::GradDim>> {
         self.gradient.borrow()
     }
 
-    fn gradient_mut(&self) -> RefMut<Tensor<Self::Dim>> {
+    fn gradient_mut(&self) -> RefMut<Tensor<Self::GradDim>> {
         self.gradient.borrow_mut()
     }
 
@@ -81,8 +82,8 @@ where
     }
 
     fn backward(&self) {
-        send_gradient(&self.lhs, &*self.gradient());
-        send_gradient(&self.rhs, &*self.gradient());
+        self.lhs.update_gradient(&*self.gradient());
+        self.rhs.update_gradient(&*self.gradient());
 
         self.lhs.backward();
         self.rhs.backward();
@@ -106,7 +107,7 @@ mod tests {
         z.forward();
         assert_rel_eq_arr2!(arr2(&[[2.0, 1.0], [5.0, -3.0]]), z.data().clone());
 
-        z.init_grad();
+        z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(Tensor::ones((2, 2)), y.gradient().clone());
     }
@@ -120,7 +121,7 @@ mod tests {
         assert_rel_eq_arr2!(arr2(&[[2.0, -2.0], [4.0, -6.0]]), y.data().clone());
         assert_rel_eq_arr2!(arr2(&[[3.0, -3.0], [6.0, -9.0]]), z.data().clone());
 
-        z.init_grad();
+        z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(3.0 * Tensor::ones((2, 2)), x.gradient().clone());
     }

@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{Dimension, Zip};
 
-use crate::grad::{send_gradient, Function, Tensor};
+use crate::grad::{Function, Tensor};
 
 #[derive(Clone)]
 pub struct Relu<D, I>
@@ -36,19 +36,20 @@ where
 impl<D, I> Function for Relu<D, I>
 where
     D: Dimension,
-    I: Function<Dim = D>,
+    I: Function<Dim = D, GradDim = D>,
 {
     type Dim = D;
+    type GradDim = D;
 
     fn data(&self) -> Ref<Tensor<Self::Dim>> {
         self.data.borrow()
     }
 
-    fn gradient(&self) -> Ref<Tensor<Self::Dim>> {
+    fn gradient(&self) -> Ref<Tensor<Self::GradDim>> {
         self.gradient.borrow()
     }
 
-    fn gradient_mut(&self) -> RefMut<Tensor<Self::Dim>> {
+    fn gradient_mut(&self) -> RefMut<Tensor<Self::GradDim>> {
         self.gradient.borrow_mut()
     }
 
@@ -66,7 +67,8 @@ where
             .for_each(|buffer, &grad, &input| {
                 *buffer = grad * if input >= 0.0 { 1.0 } else { 0.0 }
             });
-        send_gradient(&self.input, &*self.buffer_for_backward.borrow());
+        self.input
+            .update_gradient(&*self.buffer_for_backward.borrow());
         self.input.backward();
     }
 }
@@ -87,7 +89,7 @@ mod tests {
         y.forward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [2.0, 0.0]]), y.data().clone());
 
-        y.init_grad();
+        y.init_gradient();
         y.backward();
         assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [1.0, 0.0]]), x.gradient().clone());
     }
