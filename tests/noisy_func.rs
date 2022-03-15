@@ -94,9 +94,11 @@ fn regression_against_noisy_function() {
                     .slice(s![has_processed..(has_processed + batch_size), ..])
                     .to_owned(),
             );
-            let y_train_batch = Variable::new(y_train
-                .slice(s![has_processed..(has_processed + batch_size), ..])
-                .to_owned());
+            let y_train_batch = Variable::new(
+                y_train
+                    .slice(s![has_processed..(has_processed + batch_size), ..])
+                    .to_owned(),
+            );
 
             let a1 = matmul(&x_train_batch, &w1);
             let y1 = relu(&a1);
