@@ -3,12 +3,12 @@ use std::{
     rc::Rc,
 };
 
-use ndarray::{Dimension, Zip};
+use ndarray::Dimension;
 
 use crate::grad::{Function, Tensor};
 
 #[derive(Clone)]
-pub struct Relu<D, I>
+pub struct Identity<D, I>
 where
     D: Dimension,
     I: Function,
@@ -16,24 +16,22 @@ where
     data: Rc<RefCell<Tensor<D>>>,
     input: I,
     gradient: Rc<RefCell<Tensor<D>>>,
-    buffer_for_backward: RefCell<Tensor<D>>,
 }
 
-pub fn relu<D, I>(input: &I) -> Relu<D, I>
+pub fn identity<D, I>(input: &I) -> Identity<D, I>
 where
     D: Dimension,
     I: Function<Dim = D>,
 {
     let shape = input.data().raw_dim();
-    Relu {
+    Identity {
         data: Rc::new(RefCell::new(Tensor::zeros(shape.clone()))),
         input: input.clone(),
-        gradient: Rc::new(RefCell::new(Tensor::zeros(shape.clone()))),
-        buffer_for_backward: RefCell::new(Tensor::zeros(shape)),
+        gradient: Rc::new(RefCell::new(Tensor::zeros(shape))),
     }
 }
 
-impl<D, I> Function for Relu<D, I>
+impl<D, I> Function for Identity<D, I>
 where
     D: Dimension,
     I: Function<Dim = D, GradDim = D>,
@@ -55,20 +53,11 @@ where
 
     fn forward(&self) {
         self.input.forward();
-        Zip::from(&mut *self.data.borrow_mut())
-            .and(&*self.input.data())
-            .for_each(|data, &input| *data = if input >= 0.0 { input } else { 0.0 });
+        *self.data.borrow_mut() = self.input.data().clone();
     }
 
     fn backward(&self) {
-        Zip::from(&mut *self.buffer_for_backward.borrow_mut())
-            .and(&*self.gradient())
-            .and(&*self.input.data())
-            .for_each(|buffer, &grad, &input| {
-                *buffer = grad * if input >= 0.0 { 1.0 } else { 0.0 }
-            });
-        self.input
-            .update_gradient(&*self.buffer_for_backward.borrow());
+        self.input.update_gradient(&*self.gradient());
         self.input.backward();
     }
 }
@@ -83,14 +72,14 @@ mod tests {
     use ndarray::arr2;
 
     #[test]
-    fn compute_relu() {
+    fn compute_identity() {
         let x = Variable::new(arr2(&[[1.0, 0.0], [2.0, -1.0]])).requires_grad();
-        let y = relu(&x);
+        let y = identity(&x);
         y.forward();
-        assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [2.0, 0.0]]), y.data().clone());
+        assert_rel_eq_arr2!(arr2(&[[1.0, 0.0], [2.0, -1.0]]), y.data().clone());
 
         y.init_gradient();
         y.backward();
-        assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [1.0, 0.0]]), x.gradient().clone());
+        assert_rel_eq_arr2!(arr2(&[[1.0, 1.0], [1.0, 1.0]]), x.gradient().clone());
     }
 }

@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{linalg::general_mat_mul, Ix2};
 
-use crate::grad::{send_gradient, Function, Tensor};
+use crate::grad::{Function, Tensor};
 
 pub fn matmul<Lhs, Rhs>(lhs: &Lhs, rhs: &Rhs) -> MatrixMultiplication<Lhs, Rhs>
 where
@@ -45,20 +45,21 @@ where
 
 impl<Lhs, Rhs> Function for MatrixMultiplication<Lhs, Rhs>
 where
-    Lhs: Function<Dim = Ix2>,
-    Rhs: Function<Dim = Ix2>,
+    Lhs: Function<Dim = Ix2, GradDim = Ix2>,
+    Rhs: Function<Dim = Ix2, GradDim = Ix2>,
 {
     type Dim = Ix2;
+    type GradDim = Ix2;
 
     fn data(&self) -> Ref<Tensor<Self::Dim>> {
         self.data.borrow()
     }
 
-    fn gradient(&self) -> Ref<Tensor<Self::Dim>> {
+    fn gradient(&self) -> Ref<Tensor<Self::GradDim>> {
         self.gradient.borrow()
     }
 
-    fn gradient_mut(&self) -> RefMut<Tensor<Self::Dim>> {
+    fn gradient_mut(&self) -> RefMut<Tensor<Self::GradDim>> {
         self.gradient.borrow_mut()
     }
 
@@ -76,7 +77,7 @@ where
 
     fn backward(&self) {
         let lhs_grad = self.gradient().dot(&self.rhs.data().t());
-        send_gradient(&self.lhs, &lhs_grad);
+        self.lhs.update_gradient(&lhs_grad);
 
         // Use `general_mat_mul` because we have to move transposed matrix when computing dot
         // product.
@@ -88,7 +89,7 @@ where
             1.0,
             &mut rhs_grad,
         );
-        send_gradient(&self.rhs, &rhs_grad);
+        self.rhs.update_gradient(&rhs_grad);
 
         self.lhs.backward();
         self.rhs.backward();
@@ -124,7 +125,7 @@ mod tests {
         let z = matmul(&x, &w);
         z.forward();
 
-        z.init_grad();
+        z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(
             arr2(&[[4.0, 5.5], [4.0, 5.5], [4.0, 5.5]]),

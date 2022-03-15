@@ -1,5 +1,7 @@
 pub mod addition;
+pub mod identity;
 pub mod matmul;
+pub mod mse;
 pub mod mul;
 pub mod relu;
 pub mod sigmoid;
@@ -17,27 +19,44 @@ pub type Tensor<D> = Array<f32, D>;
 /// All node in the graph implements this trait.
 pub trait Function: Clone {
     type Dim: Dimension;
+    type GradDim: Dimension;
 
     /// Return the reference to this node's value which has computed in forward path for given inputs.
     fn data(&self) -> Ref<Tensor<Self::Dim>>;
 
+    /// Return the reference to the gradient of the whole function with respect to this node.
+    fn gradient(&self) -> Ref<Tensor<Self::GradDim>>;
+
+    /// Return the mutable reference to the gradient of the whole function with respect to this node.
+    fn gradient_mut(&self) -> RefMut<Tensor<Self::GradDim>>;
+
     /// Initialize gradient with the tensor whose elements are all 1.0.
     /// This is called when the struct instance is the root of the computation graph.
-    fn init_grad(&self) {
+    fn init_gradient(&self) {
         let shape = self.gradient().raw_dim();
         *self.gradient_mut() = Tensor::ones(shape);
     }
 
-    /// Return the reference to the gradient of the whole function with respect to this node.
-    fn gradient(&self) -> Ref<Tensor<Self::Dim>>;
-
-    /// Return the mutable reference to the gradient of the whole function with respect to this node.
-    fn gradient_mut(&self) -> RefMut<Tensor<Self::Dim>>;
+    /// Update the gradient by adding `gradient`.
+    fn update_gradient<'a, P>(&self, gradient: P)
+    where
+        P: IntoNdProducer<
+            Dim = Self::GradDim,
+            Output = ArrayView<'a, f32, Self::GradDim>,
+            Item = &'a f32,
+        >,
+    {
+        Zip::from(&mut *self.gradient_mut())
+            .and(gradient.into_producer())
+            .for_each(|grad, &incoming| *grad += incoming);
+    }
 
     /// Run forward propagation.
+    /// Call `forward` function(s) of the children node(s) before computing this node's data.
     fn forward(&self);
 
     /// Run backward propagation.
+    /// Call `forward` function(s) of the children node(s) after computing this node's gradient.
     fn backward(&self);
 }
 
@@ -71,40 +90,46 @@ where
             ..self
         }
     }
+
+    pub fn data_mut(&self) -> RefMut<Tensor<D>> {
+        self.data.borrow_mut()
+    }
 }
 
 impl<D: Dimension> Function for Variable<D> {
     type Dim = D;
+    type GradDim = D;
 
     fn data(&self) -> Ref<Tensor<Self::Dim>> {
         self.data.borrow()
     }
 
-    fn gradient(&self) -> Ref<Tensor<Self::Dim>> {
+    fn gradient(&self) -> Ref<Tensor<Self::GradDim>> {
         self.gradient.borrow()
     }
 
-    fn gradient_mut(&self) -> RefMut<Tensor<Self::Dim>> {
+    fn gradient_mut(&self) -> RefMut<Tensor<Self::GradDim>> {
         self.gradient.borrow_mut()
+    }
+
+    fn update_gradient<'a, P>(&self, gradient: P)
+    where
+        P: IntoNdProducer<
+            Dim = Self::GradDim,
+            Output = ArrayView<'a, f32, Self::GradDim>,
+            Item = &'a f32,
+        >,
+    {
+        if !self.requires_grad {
+            return;
+        }
+
+        Zip::from(&mut *self.gradient_mut())
+            .and(gradient.into_producer())
+            .for_each(|grad, &incoming| *grad += incoming);
     }
 
     fn forward(&self) {}
 
-    fn backward(&self) {
-        // Work around to handle variables which does not require grad.
-        if !self.requires_grad {
-            let shape = self.gradient.borrow().raw_dim();
-            *self.gradient.borrow_mut() = Tensor::zeros(shape);
-        }
-    }
-}
-
-pub(crate) fn send_gradient<'a, F, P>(node: &F, gradient: P)
-where
-    F: Function,
-    P: IntoNdProducer<Dim = F::Dim, Output = ArrayView<'a, f32, F::Dim>, Item = &'a f32>,
-{
-    Zip::from(&mut *node.gradient_mut())
-        .and(gradient.into_producer())
-        .for_each(|node_grad, grad| *node_grad += *grad);
+    fn backward(&self) {}
 }

@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{Dimension, Zip};
 
-use crate::grad::{send_gradient, Function, Tensor};
+use crate::grad::{Function, Tensor};
 
 #[derive(Clone)]
 pub struct Sigmoid<D, I>
@@ -40,19 +40,20 @@ fn compute_sigmoid(x: f32) -> f32 {
 impl<D, I> Function for Sigmoid<D, I>
 where
     D: Dimension,
-    I: Function<Dim = D>,
+    I: Function<Dim = D, GradDim = D>,
 {
     type Dim = D;
+    type GradDim = D;
 
     fn data(&self) -> Ref<Tensor<Self::Dim>> {
         self.data.borrow()
     }
 
-    fn gradient(&self) -> Ref<Tensor<Self::Dim>> {
+    fn gradient(&self) -> Ref<Tensor<Self::GradDim>> {
         self.gradient.borrow()
     }
 
-    fn gradient_mut(&self) -> RefMut<Tensor<Self::Dim>> {
+    fn gradient_mut(&self) -> RefMut<Tensor<Self::GradDim>> {
         self.gradient.borrow_mut()
     }
 
@@ -71,7 +72,8 @@ where
                 let s = compute_sigmoid(input);
                 *buffer = grad * (s * (1.0 - s));
             });
-        send_gradient(&self.input, &*self.buffer_for_backward.borrow());
+        self.input
+            .update_gradient(&*self.buffer_for_backward.borrow());
         self.input.backward();
     }
 }
@@ -101,7 +103,7 @@ mod tests {
             y.data().clone()
         );
 
-        y.init_grad();
+        y.init_gradient();
         y.backward();
         assert_rel_eq_arr2!(
             arr2(&[[
