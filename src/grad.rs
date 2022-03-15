@@ -90,6 +90,10 @@ where
             ..self
         }
     }
+
+    pub fn data_mut(&self) -> RefMut<Tensor<D>> {
+        self.data.borrow_mut()
+    }
 }
 
 impl<D: Dimension> Function for Variable<D> {
