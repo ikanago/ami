@@ -1,4 +1,5 @@
 pub mod addition;
+pub mod identity;
 pub mod matmul;
 pub mod mse;
 pub mod mul;
@@ -36,6 +37,7 @@ pub trait Function: Clone {
         *self.gradient_mut() = Tensor::ones(shape);
     }
 
+    /// Update the gradient by adding `gradient`.
     fn update_gradient<'a, P>(&self, gradient: P)
     where
         P: IntoNdProducer<
@@ -50,9 +52,11 @@ pub trait Function: Clone {
     }
 
     /// Run forward propagation.
+    /// Call `forward` function(s) of the children node(s) before computing this node's data.
     fn forward(&self);
 
     /// Run backward propagation.
+    /// Call `forward` function(s) of the children node(s) after computing this node's gradient.
     fn backward(&self);
 }
 

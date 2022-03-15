@@ -28,7 +28,6 @@ where
     input: Input,
     target: Target,
     gradient: Rc<RefCell<Tensor<D>>>,
-    buffer_for_backward: RefCell<Tensor<D>>,
 }
 
 impl<D, Input, Target> MeanSquaredError<D, Input, Target>
@@ -45,7 +44,6 @@ where
             input: input.clone(),
             target: target.clone(),
             gradient: Rc::new(RefCell::new(Tensor::zeros(input.data().raw_dim()))),
-            buffer_for_backward: RefCell::new(Tensor::zeros(input.data().raw_dim())),
         }
     }
 }
