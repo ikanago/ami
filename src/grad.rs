@@ -11,9 +11,10 @@ use std::{
     rc::Rc,
 };
 
-use ndarray::{Array, ArrayView, DimMax, Dimension, IntoNdProducer, Zip};
+use ndarray::{Array, ArrayD, ArrayView, Axis, DimMax, Dimension, IntoNdProducer, Zip};
 
 pub type Tensor<D> = Array<f32, D>;
+pub type DynTensor = ArrayD<f32>;
 pub(crate) type Broadcasted<Lhs, Rhs> = <Lhs as DimMax<Rhs>>::Output;
 pub(crate) type BroadTensor<Lhs, Rhs> = Tensor<Broadcasted<Lhs, Rhs>>;
 
@@ -183,12 +184,43 @@ where
     Tensor::zeros(broadcasted_shape)
 }
 
+/// Sum up along specified `axis` in-place.
+/// This reduces the dimentionality of `x` by 1.
+fn sum_axis_inplace(x: &mut DynTensor, axis: Axis) {
+    let (accumulated, rest) = x.view_mut().split_at(axis, 1);
+    Zip::from(accumulated.remove_axis(axis))
+        .and(rest.lanes(axis))
+        .for_each(|acc, rest| *acc += rest.sum());
+    // There remains elements refered by `rest`, so remove them.
+    x.index_axis_inplace(axis, 0);
+}
+
+/// Reduce the dimentionality of the tensor `x` to `dim`.
+/// In the process, sum up along the axis which lacks or whose size is one.
 pub fn reduce<D, E>(x: &Tensor<D>, dim: E) -> Tensor<E>
 where
     D: Dimension,
     E: Dimension,
 {
-    Tensor::zeros(dim)
+    // Convert to dynamic array because following process reduces the dimentionality in a loop.
+    let mut x = x.clone().into_dyn();
+
+    while x.ndim() > dim.ndim() {
+        sum_axis_inplace(&mut x, Axis(0));
+    }
+
+    for (axis, _) in dim
+        .slice()
+        .iter()
+        .enumerate()
+        .filter(|(_, &size)| size == 1)
+    {
+        sum_axis_inplace(&mut x, Axis(axis));
+        x.insert_axis_inplace(Axis(axis));
+    }
+
+    assert_eq!(x.raw_dim(), dim.into_dyn());
+    x.into_dimensionality::<E>().unwrap()
 }
 
 #[cfg(test)]
@@ -263,13 +295,13 @@ mod tests {
         assert_rel_eq_arr2!(arr2(&[[3.0], [6.0], [9.0]]), a_3_1);
 
         let a_1_3 = reduce(&a, IntoDimension::into_dimension((1, 3)));
-        assert_rel_eq_arr2!(arr2(&[[6.0], [6.0], [6.0]]), a_1_3);
+        assert_rel_eq_arr2!(arr2(&[[6.0, 6.0, 6.0]]), a_1_3);
     }
 
     #[test]
     fn reduce_2d_to_1d() {
         let a = arr2(&[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]]);
         let a_3 = reduce(&a, IntoDimension::into_dimension((3,)));
-        assert_rel_eq_arr2!(arr1(&[3.0, 6.0, 9.0]), a_3);
+        assert_rel_eq_arr2!(arr1(&[6.0, 6.0, 6.0]), a_3);
     }
 }
