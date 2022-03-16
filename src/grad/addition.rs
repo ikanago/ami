@@ -3,46 +3,46 @@ use std::{
     rc::Rc,
 };
 
-use ndarray::{Dimension, Zip};
+use ndarray::{DimMax, Dimension, Zip};
 
-use crate::grad::{Function, Tensor};
+use crate::grad::{broadcast_zeros, BroadTensor, Function, Tensor};
 
-pub fn add<D, Lhs, Rhs>(lhs: &Lhs, rhs: &Rhs) -> Addition<D, Lhs, Rhs>
+use super::{reduce, Broadcasted};
+
+pub fn add<Lhs, Rhs>(lhs: &Lhs, rhs: &Rhs) -> Addition<Lhs, Rhs>
 where
-    D: Dimension,
-    Lhs: Function<Dim = D>,
-    Rhs: Function<Dim = D>,
+    Lhs: Function,
+    Rhs: Function,
+    Lhs::Dim: DimMax<Rhs::Dim>,
 {
     Addition::new(lhs, rhs)
 }
 
 #[derive(Clone)]
-pub struct Addition<D, Lhs, Rhs>
+pub struct Addition<Lhs, Rhs>
 where
-    D: Dimension,
     Lhs: Function,
     Rhs: Function,
+    Lhs::Dim: DimMax<Rhs::Dim>,
 {
-    // TODO: this cannot restrict the shape of rhs.
-    data: Rc<RefCell<Tensor<D>>>,
+    data: Rc<RefCell<BroadTensor<Lhs::Dim, Rhs::Dim>>>,
     lhs: Lhs,
     rhs: Rhs,
-    gradient: Rc<RefCell<Tensor<D>>>,
+    gradient: Rc<RefCell<BroadTensor<Lhs::Dim, Rhs::Dim>>>,
 }
 
-impl<D, Lhs, Rhs> Addition<D, Lhs, Rhs>
+impl<Lhs, Rhs> Addition<Lhs, Rhs>
 where
-    D: Dimension,
-    Lhs: Function<Dim = D>,
-    Rhs: Function<Dim = D>,
+    Lhs: Function,
+    Rhs: Function,
+    Lhs::Dim: Dimension + DimMax<Rhs::Dim>,
 {
     pub fn new(lhs: &Lhs, rhs: &Rhs) -> Self {
-        assert_eq!(lhs.data().shape(), rhs.data().shape());
-
-        let shape = lhs.data().raw_dim();
+        let data = broadcast_zeros(&lhs.data(), &rhs.data());
+        let shape = data.raw_dim();
 
         Self {
-            data: Rc::new(RefCell::new(Tensor::zeros(shape.clone()))),
+            data: Rc::new(RefCell::new(data)),
             lhs: lhs.clone(),
             rhs: rhs.clone(),
             gradient: Rc::new(RefCell::new(Tensor::zeros(shape))),
@@ -50,14 +50,14 @@ where
     }
 }
 
-impl<D, Lhs, Rhs> Function for Addition<D, Lhs, Rhs>
+impl<Lhs, Rhs> Function for Addition<Lhs, Rhs>
 where
-    D: Dimension,
-    Lhs: Function<Dim = D, GradDim = D>,
-    Rhs: Function<Dim = D, GradDim = D>,
+    Lhs: Function,
+    Rhs: Function,
+    Lhs::Dim: Dimension + DimMax<Rhs::Dim>,
 {
-    type Dim = D;
-    type GradDim = D;
+    type Dim = Broadcasted<Lhs::Dim, Rhs::Dim>;
+    type GradDim = Broadcasted<Lhs::Dim, Rhs::Dim>;
 
     fn data(&self) -> Ref<Tensor<Self::Dim>> {
         self.data.borrow()
@@ -76,14 +76,16 @@ where
         self.rhs.forward();
 
         Zip::from(&mut *self.data.borrow_mut())
-            .and(&*self.lhs.data())
-            .and(&*self.rhs.data())
+            .and_broadcast(&*self.lhs.data())
+            .and_broadcast(&*self.rhs.data())
             .for_each(|data, l, r| *data = l + r);
     }
 
     fn backward(&self) {
-        self.lhs.update_gradient(&*self.gradient());
-        self.rhs.update_gradient(&*self.gradient());
+        let lhs_grad = reduce(&self.gradient(), self.lhs.gradient().raw_dim());
+        self.lhs.update_gradient(&lhs_grad);
+        let rhs_grad = reduce(&self.gradient(), self.rhs.gradient().raw_dim());
+        self.rhs.update_gradient(&rhs_grad);
 
         self.lhs.backward();
         self.rhs.backward();
@@ -97,7 +99,7 @@ mod tests {
     use super::*;
 
     use approx::assert_relative_eq;
-    use ndarray::arr2;
+    use ndarray::{arr1, arr2};
 
     #[test]
     fn var_mul_var() {
@@ -124,5 +126,23 @@ mod tests {
         z.init_gradient();
         z.backward();
         assert_rel_eq_arr2!(3.0 * Tensor::ones((2, 2)), x.gradient().clone());
+    }
+
+    #[test]
+    fn broadcast_add() {
+        let a = Variable::new(arr2(&[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]]))
+            .requires_grad();
+        let b = Variable::new(arr1(&[4.0, 4.0, 4.0])).requires_grad();
+        let z = add(&a, &b);
+        z.forward();
+        assert_rel_eq_arr2!(
+            arr2(&[[5.0, 5.0, 5.0], [6.0, 6.0, 6.0], [7.0, 7.0, 7.0]]),
+            z.data().clone()
+        );
+
+        z.init_gradient();
+        z.backward();
+        assert_rel_eq_arr2!(Tensor::ones((3, 3)), a.gradient().clone());
+        assert_rel_eq_arr2!(arr1(&[3.0, 3.0, 3.0]), b.gradient().clone());
     }
 }

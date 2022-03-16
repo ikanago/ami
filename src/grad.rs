@@ -15,7 +15,7 @@ use ndarray::{Array, ArrayD, ArrayView, Axis, DimMax, Dimension, IntoNdProducer,
 
 pub type Tensor<D> = Array<f32, D>;
 pub type DynTensor = ArrayD<f32>;
-pub(crate) type Broadcasted<Lhs, Rhs> = <Lhs as DimMax<Rhs>>::Output;
+pub(crate) type Broadcasted<LhsDim, RhsDim> = <LhsDim as DimMax<RhsDim>>::Output;
 pub(crate) type BroadTensor<Lhs, Rhs> = Tensor<Broadcasted<Lhs, Rhs>>;
 
 /// Trait to represent a computational graph of a function to be diffrentiated.
@@ -145,10 +145,13 @@ impl<D: Dimension> Function for Variable<D> {
 ///   * Both dimention size match, adopt it.
 ///   * One of the dimention size is 1, adopt the other.
 ///   * Both dimention size is different and not 1, these shape cannot be broadcasted.
-pub fn broadcast_zeros<Lhs, Rhs>(lhs: &Tensor<Lhs>, rhs: &Tensor<Rhs>) -> BroadTensor<Lhs, Rhs>
+pub fn broadcast_zeros<LhsDim, RhsDim>(
+    lhs: &Tensor<LhsDim>,
+    rhs: &Tensor<RhsDim>,
+) -> BroadTensor<LhsDim, RhsDim>
 where
-    Lhs: Dimension + DimMax<Rhs>,
-    Rhs: Dimension,
+    LhsDim: Dimension + DimMax<RhsDim>,
+    RhsDim: Dimension,
 {
     let (larger_shape, smaller_shape) = if lhs.ndim() > rhs.ndim() {
         (lhs.shape(), rhs.shape())
@@ -157,7 +160,7 @@ where
     };
     let leading_dims = larger_shape.len() - smaller_shape.len();
 
-    let mut broadcasted_shape = Broadcasted::<Lhs, Rhs>::zeros(larger_shape.len());
+    let mut broadcasted_shape = Broadcasted::<LhsDim, RhsDim>::zeros(larger_shape.len());
     let broadcasted_shape_iter = broadcasted_shape.slice_mut().iter_mut();
     let smaller_shape_iter = [1]
         .iter()
