@@ -53,7 +53,6 @@ fn main() {
     let mut rng = thread_rng();
     let x_train = generate_data(160, 3, -10.0, 10.0, &mut rng);
     let y_train = func_to_learn(x_train.view());
-    dbg!(&y_train);
 
     let batch_size = 16;
     let mut network = Network::new(0.001);
