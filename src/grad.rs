@@ -18,6 +18,12 @@ pub type DynTensor = ArrayD<f32>;
 pub(crate) type Broadcasted<LhsDim, RhsDim> = <LhsDim as DimMax<RhsDim>>::Output;
 pub(crate) type BroadTensor<Lhs, Rhs> = Tensor<Broadcasted<Lhs, Rhs>>;
 
+pub use addition::{add, Addition};
+pub use matmul::{matmul, MatrixMultiplication};
+pub use mse::{mse, MeanSquaredError};
+pub use relu::{relu, Relu};
+pub use sigmoid::{sigmoid, Sigmoid};
+
 /// Trait to represent a computational graph of a function to be diffrentiated.
 /// All node in the graph implements this trait.
 pub trait Function: Clone {

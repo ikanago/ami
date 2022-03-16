@@ -3,11 +3,7 @@ use std::marker::PhantomData;
 use ndarray::{Array, Ix1, Ix2};
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 
-use crate::grad::{
-    addition::{add, Addition},
-    matmul::{matmul, MatrixMultiplication},
-    Function, Variable,
-};
+use crate::grad::{add, matmul, Addition, Function, MatrixMultiplication, Variable};
 
 /// Trait to represent learning model.
 pub trait Model<In, Out>
