@@ -136,6 +136,14 @@ impl<D: Dimension> Function for Variable<D> {
     fn backward(&self) {}
 }
 
+/// Create zero tensor whose shape is broadcasted one from lhs and rhs.
+///
+/// Broadcast algorithm:
+/// * Pad the smaller shape with 1 to match the dimentionan to the larger shape.
+/// * Iterate each dimention size.
+///   * Both dimention size match, adopt it.
+///   * One of the dimention size is 1, adopt the other.
+///   * Both dimention size is different and not 1, these shape cannot be broadcasted.
 pub(crate) fn broadcast_zeros<Lhs, Rhs>(
     lhs: &Tensor<Lhs>,
     rhs: &Tensor<Rhs>,
@@ -152,15 +160,15 @@ where
     let leading_dims = larger_shape.len() - smaller_shape.len();
 
     let mut broadcasted_shape = Broadcasted::<Lhs, Rhs>::zeros(larger_shape.len());
-    let broadcasted_shape_iter = broadcasted_shape.slice_mut().iter_mut().rev();
-    let smaller_shape_iter = smaller_shape
+    let broadcasted_shape_iter = broadcasted_shape.slice_mut().iter_mut();
+    let smaller_shape_iter = [1]
         .iter()
-        .rev()
-        .chain([1].iter().cycle().take(leading_dims))
+        .cycle()
+        .take(leading_dims)
+        .chain(smaller_shape)
         .collect::<Vec<_>>();
     larger_shape
         .iter()
-        .rev()
         .zip(smaller_shape_iter)
         .zip(broadcasted_shape_iter)
         .for_each(|((&l, &r), res)| {
