@@ -144,10 +144,7 @@ impl<D: Dimension> Function for Variable<D> {
 ///   * Both dimention size match, adopt it.
 ///   * One of the dimention size is 1, adopt the other.
 ///   * Both dimention size is different and not 1, these shape cannot be broadcasted.
-pub(crate) fn broadcast_zeros<Lhs, Rhs>(
-    lhs: &Tensor<Lhs>,
-    rhs: &Tensor<Rhs>,
-) -> BroadTensor<Lhs, Rhs>
+pub fn broadcast_zeros<Lhs, Rhs>(lhs: &Tensor<Lhs>, rhs: &Tensor<Rhs>) -> BroadTensor<Lhs, Rhs>
 where
     Lhs: Dimension + DimMax<Rhs>,
     Rhs: Dimension,
@@ -186,9 +183,22 @@ where
     Tensor::zeros(broadcasted_shape)
 }
 
+pub fn reduce<D, E>(x: &Tensor<D>, dim: E) -> Tensor<E>
+where
+    D: Dimension,
+    E: Dimension,
+{
+    Tensor::zeros(dim)
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::assert_rel_eq_arr2;
+
     use super::*;
+
+    use approx::assert_relative_eq;
+    use ndarray::{arr1, arr2, IntoDimension};
 
     #[test]
     fn same_shape() {
@@ -244,5 +254,22 @@ mod tests {
         let a = Tensor::zeros((2, 3, 4));
         let b = Tensor::zeros((2, 4));
         broadcast_zeros(&a, &b);
+    }
+
+    #[test]
+    fn reduce_2d_to_2d() {
+        let a = arr2(&[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]]);
+        let a_3_1 = reduce(&a, IntoDimension::into_dimension((3, 1)));
+        assert_rel_eq_arr2!(arr2(&[[3.0], [6.0], [9.0]]), a_3_1);
+
+        let a_1_3 = reduce(&a, IntoDimension::into_dimension((1, 3)));
+        assert_rel_eq_arr2!(arr2(&[[6.0], [6.0], [6.0]]), a_1_3);
+    }
+
+    #[test]
+    fn reduce_2d_to_1d() {
+        let a = arr2(&[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]]);
+        let a_3 = reduce(&a, IntoDimension::into_dimension((3,)));
+        assert_rel_eq_arr2!(arr1(&[3.0, 6.0, 9.0]), a_3);
     }
 }
