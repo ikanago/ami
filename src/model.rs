@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
 
-use ndarray::{Array, Ix1, Ix2};
+use ndarray::{Array, Ix1, Ix2, Dimension};
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 
-use crate::grad::{add, matmul, Addition, Function, MatrixMultiplication, Variable};
+use crate::grad::{self, add, matmul, Addition, Function, MatrixMultiplication, Variable, relu, sigmoid};
 
 /// Trait to represent learning model.
 pub trait Model<In, Out>
@@ -43,6 +43,32 @@ where
         input: In,
     ) -> Addition<MatrixMultiplication<In, Variable<Ix2>>, Variable<Ix1>> {
         add(&matmul(&input, &self.weight), &self.bias)
+    }
+}
+
+/// Layer applying ReLU.
+pub struct Relu;
+
+impl<D, In> Model<In, grad::Relu<D, In>> for Relu
+where
+    D: Dimension,
+    In: Function<Dim = D, GradDim = D>,
+{
+    fn forward(&self, input: In) -> grad::Relu<D, In> {
+        relu(&input)
+    }
+}
+
+/// Layer applying sigmoid.
+pub struct Sigmoid;
+
+impl<D, In> Model<In, grad::Sigmoid<D, In>> for Sigmoid
+where
+    D: Dimension,
+    In: Function<Dim = D, GradDim = D>,
+{
+    fn forward(&self, input: In) -> grad::Sigmoid<D, In> {
+        sigmoid(&input)
     }
 }
 
