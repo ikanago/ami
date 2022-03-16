@@ -40,6 +40,11 @@ pub trait Function: Clone {
         *self.gradient_mut() = Tensor::ones(shape);
     }
 
+    fn zero_gradient(&self) {
+        let shape = self.gradient().raw_dim();
+        *self.gradient_mut() = Tensor::zeros(shape);
+    }
+
     /// Update the gradient by adding `gradient`.
     fn update_gradient<'a, P>(&self, gradient: P)
     where

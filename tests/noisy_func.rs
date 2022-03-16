@@ -1,7 +1,5 @@
-use ami::grad::{
-    identity::identity, matmul::matmul, mse::mse, relu::relu, Function, Tensor, Variable,
-};
-use ndarray::{s, Array, Array2, ArrayView2, Axis, Ix2, Zip};
+use ami::grad::{addition::add, matmul::matmul, mse::mse, relu::relu, Function, Tensor, Variable};
+use ndarray::{s, Array, Array2, ArrayView2, Axis, Dimension, Zip};
 use ndarray_rand::{
     rand::{thread_rng, Rng},
     rand_distr::{Distribution, Normal, Uniform},
@@ -47,17 +45,7 @@ fn generate_data(
         .to_owned()
 }
 
-fn forward(x: Tensor<Ix2>, w: &Variable<Ix2>) -> impl Function<Dim = Ix2, GradDim = Ix2> {
-    /*
-    let inputs_for_bias = Tensor::ones((x.nrows(), 1));
-    let mut x = x;
-    x.append(Axis(1), inputs_for_bias.view()).unwrap();
-    */
-    let x = Variable::new(x);
-    matmul(&x, w)
-}
-
-fn update_parameter(p: &Variable<Ix2>, lr: f32) {
+fn update_parameter<D: Dimension>(p: &Variable<D>, lr: f32) {
     let mut buffer = Tensor::zeros(p.data().raw_dim());
     Zip::from(&mut buffer)
         .and(&*p.data())
@@ -69,17 +57,19 @@ fn update_parameter(p: &Variable<Ix2>, lr: f32) {
 #[test]
 fn regression_against_noisy_function() {
     let mut rng = thread_rng();
-    let x_train = generate_data(160, 3, -10.0, 10.0, &mut rng);
+    let x_min = -1.0;
+    let x_max = 1.0;
+    let x_train = generate_data(160, 3, x_min, x_max, &mut rng);
     let y_train = func_to_learn(x_train.view());
 
     let batch_size = 16;
     let w1 = Variable::new(Array::random((3, 4), Uniform::new(-1.0, 1.0))).requires_grad();
+    let b1 = Variable::new(Array::random((4,), Uniform::new(-1.0, 1.0))).requires_grad();
     let w2 = Variable::new(Array::random((4, 1), Uniform::new(-1.0, 1.0))).requires_grad();
-    dbg!(&w1.data());
-    dbg!(&w2.data());
+    let b2 = Variable::new(Array::random((1,), Uniform::new(-1.0, 1.0))).requires_grad();
 
-    let lr = 1e-8;
-    let epochs = 300;
+    let lr = 1e-3;
+    let epochs = 1000;
     for epoch in 0..epochs {
         let mut has_processed = 0;
         let mut total_loss = 0.0;
@@ -100,18 +90,24 @@ fn regression_against_noisy_function() {
                     .to_owned(),
             );
 
-            let a1 = matmul(&x_train_batch, &w1);
+            let p1 = matmul(&x_train_batch, &w1);
+            let a1 = add(&p1, &b1);
             let y1 = relu(&a1);
-            let a = matmul(&y1, &w2);
+            let p2 = matmul(&y1, &w2);
+            let a2 = add(&p2, &b2);
             // let y = identity(&a);
-            let loss = mse(&a, &y_train_batch);
+            let loss = mse(&a2, &y_train_batch);
             loss.forward();
             loss.backward();
 
             update_parameter(&w1, lr);
+            update_parameter(&b1, lr);
             update_parameter(&w2, lr);
-            dbg!(&y1.gradient());
-            dbg!(&a.gradient());
+            update_parameter(&b2, lr);
+            w1.zero_gradient();
+            b1.zero_gradient();
+            w2.zero_gradient();
+            b2.zero_gradient();
             total_loss += loss.data()[()];
             has_processed += batch_size;
         }
@@ -119,9 +115,11 @@ fn regression_against_noisy_function() {
         println!(" mean loss: {}", mean_loss);
     }
 
-    let x_test = generate_data(20, 3, -10.0, 10.0, &mut rng);
+    let x_test = generate_data(20, 3, x_min, x_max, &mut rng);
     let y_test = func(x_test.view());
-    let y1 = relu(&forward(x_test, &w1));
-    let y_pred = identity(&forward(y1.data().clone(), &w2));
+    let y1 = relu(&add(&matmul(&Variable::new(x_test), &w1), &b1));
+    let y_pred = add(&matmul(&y1, &w2), &b2);
+    y_pred.forward();
+    println!("test pred: {}", y_pred.data().clone());
     println!("test error: {}", y_test - y_pred.data().clone());
 }
