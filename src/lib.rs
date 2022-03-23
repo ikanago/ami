@@ -4,6 +4,7 @@ pub mod layer;
 pub mod loss;
 pub mod model;
 pub mod network;
+pub mod optimizer;
 
 #[macro_export]
 macro_rules! assert_rel_eq_arr1 {
