@@ -201,6 +201,7 @@ where
 /// Sum up along specified `axis` in-place.
 /// This reduces the dimentionality of `x` by 1.
 fn sum_axis_inplace(x: &mut DynTensor, axis: Axis) {
+    // TODO: Consider to use `accumulate_axis_inplace()` instead.
     let (accumulated, rest) = x.view_mut().split_at(axis, 1);
     Zip::from(accumulated.remove_axis(axis))
         .and(rest.lanes(axis))

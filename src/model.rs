@@ -1,26 +1,74 @@
 use std::marker::PhantomData;
 
-use ndarray::{Array, Ix1, Ix2, Dimension};
+use ndarray::{Array, Dimension, Ix1, Ix2};
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 
-use crate::grad::{self, add, matmul, Addition, Function, MatrixMultiplication, Variable, relu, sigmoid};
+use crate::grad::{self, add, matmul, relu, Addition, Function, MatrixMultiplication, Variable};
 
 /// Trait to represent learning model.
-pub trait Model<In, Out>
+pub trait Model<NetIn>
 where
-    In: Function,
-    Out: Function,
+    NetIn: Function,
 {
-    fn forward(&self, input: In) -> Out;
+    type In: Function;
+    type Out: Function;
+
+    fn forward(&self, input: NetIn) -> Self::Out;
+
+    fn update_parameters(&self);
+}
+
+pub trait Chainable<NetIn, Prev>
+where
+    NetIn: Function,
+    Prev: Model<NetIn>,
+{
+    type Chained;
+
+    fn chain(self, previous: Prev) -> Self::Chained;
+}
+
+pub struct Input<D: Dimension> {
+    _dim: PhantomData<D>,
+}
+
+impl<D: Dimension> Default for Input<D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<D> Input<D>
+where
+    D: Dimension,
+{
+    pub fn new() -> Self {
+        Input { _dim: PhantomData }
+    }
+}
+
+impl<D> Model<Variable<D>> for Input<D>
+where
+    D: Dimension,
+{
+    type In = Variable<D>;
+    type Out = Variable<D>;
+
+    fn forward(&self, input: Variable<D>) -> Self::Out {
+        input
+    }
+
+    fn update_parameters(&self) {}
 }
 
 /// Linear transformation layer.
-pub struct Linear {
+pub struct Linear<Prev> {
     weight: Variable<Ix2>,
     bias: Variable<Ix1>,
+    previous: Prev,
 }
 
-impl Linear {
+impl Linear<()> {
     pub fn new(in_features: usize, out_features: usize) -> Self {
         let weight = Variable::new(Array::random(
             (in_features, out_features),
@@ -30,94 +78,107 @@ impl Linear {
         let bias =
             Variable::new(Array::random((out_features,), Uniform::new(-1.0, 1.0))).requires_grad();
 
-        Self { weight, bias }
+        Self {
+            weight,
+            bias,
+            previous: (),
+        }
     }
 }
 
-impl<In> Model<In, Addition<MatrixMultiplication<In, Variable<Ix2>>, Variable<Ix1>>> for Linear
+impl<NetIn, In, Prev> Model<NetIn> for Linear<Prev>
 where
+    NetIn: Function,
     In: Function<Dim = Ix2, GradDim = Ix2>,
+    Prev: Model<NetIn, Out = In>,
 {
-    fn forward(
-        &self,
-        input: In,
-    ) -> Addition<MatrixMultiplication<In, Variable<Ix2>>, Variable<Ix1>> {
-        add(&matmul(&input, &self.weight), &self.bias)
+    type In = In;
+    type Out = Addition<MatrixMultiplication<In, Variable<Ix2>>, Variable<Ix1>>;
+
+    fn forward(&self, input: NetIn) -> Self::Out {
+        let previous_output = self.previous.forward(input);
+        add(&matmul(&previous_output, &self.weight), &self.bias)
+    }
+
+    fn update_parameters(&self) {
+        self.previous.update_parameters();
+    }
+}
+
+impl<NetIn, Prev> Chainable<NetIn, Prev> for Linear<()>
+where
+    NetIn: Function,
+    Prev: Model<NetIn>,
+{
+    type Chained = Linear<Prev>;
+
+    fn chain(self, previous: Prev) -> Self::Chained {
+        Self::Chained {
+            weight: self.weight,
+            bias: self.bias,
+            previous,
+        }
     }
 }
 
 /// Layer applying ReLU.
-pub struct Relu;
+pub struct Relu<Prev> {
+    previous: Prev,
+}
 
-impl<D, In> Model<In, grad::Relu<D, In>> for Relu
+impl Relu<()> {
+    pub fn new() -> Self {
+        Self { previous: () }
+    }
+}
+
+impl Default for Relu<()> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<D, NetIn, In, Prev> Model<NetIn> for Relu<Prev>
 where
     D: Dimension,
+    NetIn: Function,
     In: Function<Dim = D, GradDim = D>,
+    Prev: Model<NetIn, Out = In>,
 {
-    fn forward(&self, input: In) -> grad::Relu<D, In> {
-        relu(&input)
+    type In = In;
+    type Out = grad::Relu<D, In>;
+
+    fn forward(&self, input: NetIn) -> Self::Out {
+        let previous_output = self.previous.forward(input);
+        relu(&previous_output)
+    }
+
+    fn update_parameters(&self) {
+        self.previous.update_parameters();
     }
 }
 
-/// Layer applying sigmoid.
-pub struct Sigmoid;
-
-impl<D, In> Model<In, grad::Sigmoid<D, In>> for Sigmoid
+impl<NetIn, Prev> Chainable<NetIn, Prev> for Relu<()>
 where
-    D: Dimension,
-    In: Function<Dim = D, GradDim = D>,
+    NetIn: Function,
+    Prev: Model<NetIn>,
 {
-    fn forward(&self, input: In) -> grad::Sigmoid<D, In> {
-        sigmoid(&input)
+    type Chained = Relu<Prev>;
+
+    fn chain(self, previous: Prev) -> Self::Chained {
+        Self::Chained { previous }
     }
 }
 
-pub struct Compose<F, S, In, Mid, Out>
-where
-    F: Model<In, Mid>,
-    S: Model<Mid, Out>,
-    In: Function,
-    Mid: Function,
-    Out: Function,
-{
-    first: F,
-    second: S,
-    _in: PhantomData<In>,
-    _mid: PhantomData<Mid>,
-    _out: PhantomData<Out>,
-}
+#[macro_export]
+macro_rules! sequential {
+    [$first:expr, $second:expr] => {
+        $second.chain($first)
+    };
 
-/// Compose two models.
-/// Incoming data is applied to `first`, then applied to `second`.
-pub fn compose<F, S, In, Mid, Out>(first: F, second: S) -> Compose<F, S, In, Mid, Out>
-where
-    F: Model<In, Mid>,
-    S: Model<Mid, Out>,
-    In: Function,
-    Mid: Function,
-    Out: Function,
-{
-    Compose {
-        first,
-        second,
-        _in: PhantomData,
-        _mid: PhantomData,
-        _out: PhantomData,
-    }
-}
-
-impl<F, S, In, Mid, Out> Model<In, Out> for Compose<F, S, In, Mid, Out>
-where
-    F: Model<In, Mid>,
-    S: Model<Mid, Out>,
-    In: Function,
-    Mid: Function,
-    Out: Function,
-{
-    fn forward(&self, input: In) -> Out {
-        let mid = self.first.forward(input);
-        self.second.forward(mid)
-    }
+    [$first:expr, $second:expr, $($rest:expr),+] => {
+        sequential![$second.chain($first), $($rest),+]
+    };
 }
 
 #[cfg(test)]
@@ -127,8 +188,8 @@ mod tests {
     use ndarray::arr2;
 
     #[test]
-    fn forward_compose() {
-        let model = compose(Linear::new(2, 4), Linear::new(4, 1));
+    fn forward_sequential() {
+        let model = sequential![Input::new(), Linear::new(2, 4), Relu::new()];
         let x = Variable::new(arr2(&[[1.0, 0.5], [2.0, 3.0]]));
         model.forward(x);
     }
