@@ -1,9 +1,13 @@
-use ami::grad::{add, matmul, mse, relu, Function, Tensor, Variable};
-use ndarray::{s, Array, Array2, ArrayView2, Axis, Dimension, Zip};
+use ami::{
+    grad::{mse, Function, Variable},
+    model::{Chainable, Input, Linear, Model, Relu},
+    optimizer::GradientDescent,
+    sequential,
+};
+use ndarray::{s, Array2, ArrayView2, Axis};
 use ndarray_rand::{
     rand::{thread_rng, Rng},
     rand_distr::{Distribution, Normal, Uniform},
-    RandomExt,
 };
 
 // x: (batch_size, input_size)
@@ -45,15 +49,6 @@ fn generate_data(
         .to_owned()
 }
 
-fn update_parameter<D: Dimension>(p: &Variable<D>, lr: f32) {
-    let mut buffer = Tensor::zeros(p.data().raw_dim());
-    Zip::from(&mut buffer)
-        .and(&*p.data())
-        .and(&*p.gradient())
-        .for_each(|buffer, d, g| *buffer = d - lr * g);
-    *p.data_mut() = buffer;
-}
-
 #[test]
 fn regression_against_noisy_function() {
     let mut rng = thread_rng();
@@ -63,21 +58,18 @@ fn regression_against_noisy_function() {
     let y_train = func_to_learn(x_train.view());
 
     let batch_size = 16;
-    let w1 = Variable::new(Array::random((3, 4), Uniform::new(-1.0, 1.0))).requires_grad();
-    let b1 = Variable::new(Array::random((4,), Uniform::new(-1.0, 1.0))).requires_grad();
-    let w2 = Variable::new(Array::random((4, 1), Uniform::new(-1.0, 1.0))).requires_grad();
-    let b2 = Variable::new(Array::random((1,), Uniform::new(-1.0, 1.0))).requires_grad();
+    let model = sequential!(Input, Linear::new(3, 4), Relu::new(), Linear::new(4, 1));
 
     let lr = 1e-3;
+    let optimizer = GradientDescent::new(lr);
+
     let epochs = 1000;
     for epoch in 0..epochs {
         let mut has_processed = 0;
         let mut total_loss = 0.0;
-        let mut n_iters = 0;
         print!("epoch {}: ", epoch);
         while has_processed < x_train.nrows() {
             print!("#");
-            n_iters += 1;
 
             let x_train_batch = Variable::new(
                 x_train
@@ -90,35 +82,22 @@ fn regression_against_noisy_function() {
                     .to_owned(),
             );
 
-            let p1 = matmul(&x_train_batch, &w1);
-            let a1 = add(&p1, &b1);
-            let y1 = relu(&a1);
-            let p2 = matmul(&y1, &w2);
-            let a2 = add(&p2, &b2);
-            // let y = identity(&a);
-            let loss = mse(&a2, &y_train_batch);
+            let network = model.forward(x_train_batch);
+            let loss = mse(&network, &y_train_batch);
             loss.forward();
             loss.backward();
+            model.update_parameters(&optimizer);
+            model.zero_gradient();
 
-            update_parameter(&w1, lr);
-            update_parameter(&b1, lr);
-            update_parameter(&w2, lr);
-            update_parameter(&b2, lr);
-            w1.zero_gradient();
-            b1.zero_gradient();
-            w2.zero_gradient();
-            b2.zero_gradient();
             total_loss += loss.data()[()];
             has_processed += batch_size;
         }
-        let mean_loss = total_loss / n_iters as f32;
-        println!(" mean loss: {}", mean_loss);
+        println!(" total loss: {}", total_loss);
     }
 
     let x_test = generate_data(20, 3, x_min, x_max, &mut rng);
     let y_test = func(x_test.view());
-    let y1 = relu(&add(&matmul(&Variable::new(x_test), &w1), &b1));
-    let y_pred = add(&matmul(&y1, &w2), &b2);
+    let y_pred = model.forward(Variable::new(x_test));
     y_pred.forward();
     println!("test pred: {}", y_pred.data().clone());
     println!("test error: {}", y_test - y_pred.data().clone());

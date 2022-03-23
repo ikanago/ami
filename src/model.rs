@@ -1,7 +1,10 @@
 use ndarray::{Array, Dimension, Ix1, Ix2};
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 
-use crate::grad::{self, add, matmul, relu, Addition, Function, MatrixMultiplication, Variable};
+use crate::{
+    grad::{self, add, matmul, relu, Addition, Function, MatrixMultiplication, Variable},
+    optimizer::Optimizer,
+};
 
 /// Trait to represent learning model.
 /// The purpose of this trait is to track of learning parameter.
@@ -21,7 +24,9 @@ where
     /// This process does not carry out actual computation.
     fn forward(&self, input: Variable<InD>) -> Self::Output;
 
-    fn update_parameters(&self);
+    fn update_parameters<Opt: Optimizer>(&self, optimizer: &Opt);
+
+    fn zero_gradient(&self);
 }
 
 pub trait Chainable<InD, Prev>
@@ -53,7 +58,9 @@ where
         input
     }
 
-    fn update_parameters(&self) {}
+    fn update_parameters<Opt: Optimizer>(&self, _optimizer: &Opt) {}
+
+    fn zero_gradient(&self) {}
 }
 
 /// Linear transformation layer.
@@ -94,8 +101,16 @@ where
         add(&matmul(&previous_output, &self.weight), &self.bias)
     }
 
-    fn update_parameters(&self) {
-        self.previous.update_parameters();
+    fn update_parameters<Opt: Optimizer>(&self, optimizer: &Opt) {
+        optimizer.update(&self.weight);
+        optimizer.update(&self.bias);
+        self.previous.update_parameters(optimizer);
+    }
+
+    fn zero_gradient(&self) {
+        self.weight.zero_gradient();
+        self.bias.zero_gradient();
+        self.previous.zero_gradient();
     }
 }
 
@@ -147,8 +162,12 @@ where
         relu(&previous_output)
     }
 
-    fn update_parameters(&self) {
-        self.previous.update_parameters();
+    fn update_parameters<Opt: Optimizer>(&self, optimizer: &Opt) {
+        self.previous.update_parameters(optimizer);
+    }
+
+    fn zero_gradient(&self) {
+        self.previous.zero_gradient();
     }
 }
 
