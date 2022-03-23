@@ -6,22 +6,22 @@ use ndarray_rand::{rand_distr::Uniform, RandomExt};
 use crate::grad::{self, add, matmul, relu, Addition, Function, MatrixMultiplication, Variable};
 
 /// Trait to represent learning model.
-pub trait Model<NetIn>
+pub trait Model<D>
 where
-    NetIn: Function,
+    D: Dimension,
 {
     type In: Function;
     type Out: Function;
 
-    fn forward(&self, input: NetIn) -> Self::Out;
+    fn forward(&self, input: Variable<D>) -> Self::Out;
 
     fn update_parameters(&self);
 }
 
-pub trait Chainable<NetIn, Prev>
+pub trait Chainable<D, Prev>
 where
-    NetIn: Function,
-    Prev: Model<NetIn>,
+    D: Dimension,
+    Prev: Model<D>,
 {
     type Chained;
 
@@ -47,7 +47,7 @@ where
     }
 }
 
-impl<D> Model<Variable<D>> for Input<D>
+impl<D> Model<D> for Input<D>
 where
     D: Dimension,
 {
@@ -86,16 +86,16 @@ impl Linear<()> {
     }
 }
 
-impl<NetIn, In, Prev> Model<NetIn> for Linear<Prev>
+impl<D, In, Prev> Model<D> for Linear<Prev>
 where
-    NetIn: Function,
+    D: Dimension,
     In: Function<Dim = Ix2, GradDim = Ix2>,
-    Prev: Model<NetIn, Out = In>,
+    Prev: Model<D, Out = In>,
 {
     type In = In;
     type Out = Addition<MatrixMultiplication<In, Variable<Ix2>>, Variable<Ix1>>;
 
-    fn forward(&self, input: NetIn) -> Self::Out {
+    fn forward(&self, input: Variable<D>) -> Self::Out {
         let previous_output = self.previous.forward(input);
         add(&matmul(&previous_output, &self.weight), &self.bias)
     }
@@ -105,10 +105,10 @@ where
     }
 }
 
-impl<NetIn, Prev> Chainable<NetIn, Prev> for Linear<()>
+impl<D, Prev> Chainable<D, Prev> for Linear<()>
 where
-    NetIn: Function,
-    Prev: Model<NetIn>,
+    D: Dimension,
+    Prev: Model<D>,
 {
     type Chained = Linear<Prev>;
 
@@ -138,17 +138,16 @@ impl Default for Relu<()> {
     }
 }
 
-impl<D, NetIn, In, Prev> Model<NetIn> for Relu<Prev>
+impl<D, In, Prev> Model<D> for Relu<Prev>
 where
     D: Dimension,
-    NetIn: Function,
     In: Function<Dim = D, GradDim = D>,
-    Prev: Model<NetIn, Out = In>,
+    Prev: Model<D, Out = In>,
 {
     type In = In;
     type Out = grad::Relu<D, In>;
 
-    fn forward(&self, input: NetIn) -> Self::Out {
+    fn forward(&self, input: Variable<D>) -> Self::Out {
         let previous_output = self.previous.forward(input);
         relu(&previous_output)
     }
@@ -158,10 +157,10 @@ where
     }
 }
 
-impl<NetIn, Prev> Chainable<NetIn, Prev> for Relu<()>
+impl<D, Prev> Chainable<D, Prev> for Relu<()>
 where
-    NetIn: Function,
-    Prev: Model<NetIn>,
+    D: Dimension,
+    Prev: Model<D>,
 {
     type Chained = Relu<Prev>;
 
