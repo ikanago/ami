@@ -1,4 +1,4 @@
-use ami::grad::{addition::add, matmul::matmul, mse::mse, relu::relu, Function, Tensor, Variable};
+use ami::grad::{add, matmul, mse, relu, Function, Tensor, Variable};
 use ndarray::{s, Array, Array2, ArrayView2, Axis, Dimension, Zip};
 use ndarray_rand::{
     rand::{thread_rng, Rng},

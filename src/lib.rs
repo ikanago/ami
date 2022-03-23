@@ -2,6 +2,7 @@ pub mod activation;
 pub mod grad;
 pub mod layer;
 pub mod loss;
+pub mod model;
 pub mod network;
 
 #[macro_export]
