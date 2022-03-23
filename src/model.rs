@@ -1,60 +1,55 @@
-use std::marker::PhantomData;
-
 use ndarray::{Array, Dimension, Ix1, Ix2};
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 
 use crate::grad::{self, add, matmul, relu, Addition, Function, MatrixMultiplication, Variable};
 
 /// Trait to represent learning model.
-pub trait Model<D>
+/// The purpose of this trait is to track of learning parameter.
+///
+/// This trait is a higher rank representation of a computational graph.
+/// Constructing a neural network takes 2 steps: `chain` and `forward`.
+/// First, consequtive calls of `Chainable::chain` creates a linearly connected `Model`s.
+/// Then feed `input` by `Model::forward` for each input batch to obtain a diffrentiable
+/// computational graph.
+pub trait Model<InD>
 where
-    D: Dimension,
+    InD: Dimension,
 {
-    type In: Function;
-    type Out: Function;
+    type Output: Function;
 
-    fn forward(&self, input: Variable<D>) -> Self::Out;
+    /// Construct computational graph while passing `input` to the previous layer of the model.
+    /// This process does not carry out actual computation.
+    fn forward(&self, input: Variable<InD>) -> Self::Output;
 
     fn update_parameters(&self);
 }
 
-pub trait Chainable<D, Prev>
+pub trait Chainable<InD, Prev>
 where
-    D: Dimension,
-    Prev: Model<D>,
+    InD: Dimension,
+    Prev: Model<InD>,
 {
-    type Chained;
+    type Chained: Model<InD>;
 
     fn chain(self, previous: Prev) -> Self::Chained;
 }
 
-pub struct Input<D: Dimension> {
-    _dim: PhantomData<D>,
-}
+/// Marker struct to specify the end of the propagation of `input` in `Model::forward`.
+pub struct Input;
 
-impl<D: Dimension> Default for Input<D> {
+impl Default for Input {
     fn default() -> Self {
-        Self::new()
+        Self
     }
 }
 
-impl<D> Input<D>
+impl<InD> Model<InD> for Input
 where
-    D: Dimension,
+    InD: Dimension,
 {
-    pub fn new() -> Self {
-        Input { _dim: PhantomData }
-    }
-}
+    type Output = Variable<InD>;
 
-impl<D> Model<D> for Input<D>
-where
-    D: Dimension,
-{
-    type In = Variable<D>;
-    type Out = Variable<D>;
-
-    fn forward(&self, input: Variable<D>) -> Self::Out {
+    fn forward(&self, input: Variable<InD>) -> Self::Output {
         input
     }
 
@@ -86,16 +81,15 @@ impl Linear<()> {
     }
 }
 
-impl<D, In, Prev> Model<D> for Linear<Prev>
+impl<InD, Input, Prev> Model<InD> for Linear<Prev>
 where
-    D: Dimension,
-    In: Function<Dim = Ix2, GradDim = Ix2>,
-    Prev: Model<D, Out = In>,
+    InD: Dimension,
+    Input: Function<Dim = Ix2, GradDim = Ix2>,
+    Prev: Model<InD, Output = Input>,
 {
-    type In = In;
-    type Out = Addition<MatrixMultiplication<In, Variable<Ix2>>, Variable<Ix1>>;
+    type Output = Addition<MatrixMultiplication<Input, Variable<Ix2>>, Variable<Ix1>>;
 
-    fn forward(&self, input: Variable<D>) -> Self::Out {
+    fn forward(&self, input: Variable<InD>) -> Self::Output {
         let previous_output = self.previous.forward(input);
         add(&matmul(&previous_output, &self.weight), &self.bias)
     }
@@ -105,10 +99,11 @@ where
     }
 }
 
-impl<D, Prev> Chainable<D, Prev> for Linear<()>
+impl<InD, Prev> Chainable<InD, Prev> for Linear<()>
 where
-    D: Dimension,
-    Prev: Model<D>,
+    InD: Dimension,
+    Prev: Model<InD>,
+    Prev::Output: Function<Dim = Ix2, GradDim = Ix2>,
 {
     type Chained = Linear<Prev>;
 
@@ -138,16 +133,16 @@ impl Default for Relu<()> {
     }
 }
 
-impl<D, In, Prev> Model<D> for Relu<Prev>
+impl<D, InD, Input, Prev> Model<InD> for Relu<Prev>
 where
     D: Dimension,
-    In: Function<Dim = D, GradDim = D>,
-    Prev: Model<D, Out = In>,
+    InD: Dimension,
+    Input: Function<Dim = D, GradDim = D>,
+    Prev: Model<InD, Output = Input>,
 {
-    type In = In;
-    type Out = grad::Relu<D, In>;
+    type Output = grad::Relu<D, Input>;
 
-    fn forward(&self, input: Variable<D>) -> Self::Out {
+    fn forward(&self, input: Variable<InD>) -> Self::Output {
         let previous_output = self.previous.forward(input);
         relu(&previous_output)
     }
@@ -157,10 +152,12 @@ where
     }
 }
 
-impl<D, Prev> Chainable<D, Prev> for Relu<()>
+impl<D, InD, Prev> Chainable<InD, Prev> for Relu<()>
 where
     D: Dimension,
-    Prev: Model<D>,
+    InD: Dimension,
+    Prev: Model<InD>,
+    Prev::Output: Function<Dim = D, GradDim = D>,
 {
     type Chained = Relu<Prev>;
 
@@ -188,7 +185,7 @@ mod tests {
 
     #[test]
     fn forward_sequential() {
-        let model = sequential![Input::new(), Linear::new(2, 4), Relu::new()];
+        let model = sequential![Input, Linear::new(2, 4), Relu::new()];
         let x = Variable::new(arr2(&[[1.0, 0.5], [2.0, 3.0]]));
         model.forward(x);
     }
