@@ -1,47 +1,21 @@
 use std::vec;
 
 use ndarray::{Axis, RemoveAxis};
-use ndarray_rand::rand::{prelude::ThreadRng, seq::index::sample, thread_rng};
+use ndarray_rand::rand::{prelude::ThreadRng, seq::index::sample};
 
 use crate::grad::{Tensor, TensorView};
 
-pub trait Sampler {
-    fn sample(&mut self) -> Vec<usize>;
+pub enum Sampler {
+    Sequential(usize),
+    Random(usize, ThreadRng),
 }
 
-pub struct SequentialSampler {
-    size: usize,
-}
-
-impl SequentialSampler {
-    pub fn new(size: usize) -> Self {
-        Self { size }
-    }
-}
-
-impl Sampler for SequentialSampler {
-    fn sample(&mut self) -> Vec<usize> {
-        (0..self.size).into_iter().collect()
-    }
-}
-
-pub struct RandomSampler {
-    size: usize,
-    rng: ThreadRng,
-}
-
-impl RandomSampler {
-    pub fn new(size: usize) -> Self {
-        Self {
-            size,
-            rng: thread_rng(),
+impl Sampler {
+    pub fn sample(&mut self) -> Vec<usize> {
+        match self {
+            Self::Sequential(size) => (0..*size).into_iter().collect(),
+            Self::Random(size, rng) => sample(rng, *size, *size).into_vec(),
         }
-    }
-}
-
-impl Sampler for RandomSampler {
-    fn sample(&mut self) -> Vec<usize> {
-        sample(&mut self.rng, self.size, self.size).into_vec()
     }
 }
 
@@ -107,24 +81,22 @@ where
     }
 }
 
-pub struct DataLoader<S, D1, D2>
+pub struct DataLoader<D1, D2>
 where
-    S: Sampler,
     D1: RemoveAxis,
     D2: RemoveAxis,
 {
-    sampler: S,
+    sampler: Sampler,
     input: Tensor<D1>,
     target: Tensor<D2>,
 }
 
-impl<S, D1, D2> DataLoader<S, D1, D2>
+impl<D1, D2> DataLoader<D1, D2>
 where
-    S: Sampler,
     D1: RemoveAxis,
     D2: RemoveAxis,
 {
-    pub fn new(sampler: S, input: Tensor<D1>, target: Tensor<D2>) -> Self {
+    pub fn new(sampler: Sampler, input: Tensor<D1>, target: Tensor<D2>) -> Self {
         Self {
             sampler,
             input,
@@ -147,12 +119,13 @@ mod tests {
     use super::*;
 
     use ndarray::{arr1, Array};
+    use ndarray_rand::rand::thread_rng;
 
     #[test]
     fn random_sampler() {
         let size = 10;
-        let sequential = SequentialSampler::new(size).sample();
-        let mut random = RandomSampler::new(size).sample();
+        let sequential = Sampler::Sequential(size).sample();
+        let mut random = Sampler::Random(size, thread_rng()).sample();
         assert_ne!(sequential, random);
 
         random.sort();
@@ -164,7 +137,7 @@ mod tests {
         let input = Array::linspace(0.0, 3.0, 4);
         let target = Array::linspace(4.0, 7.0, 4);
         let mut batch = Batch::new(
-            SequentialSampler::new(input.len()).sample(),
+            Sampler::Sequential(input.len()).sample(),
             2,
             input.view(),
             target.view(),
@@ -179,7 +152,7 @@ mod tests {
         let input = Array::linspace(0.0, 4.0, 5);
         let target = Array::linspace(5.0, 9.0, 5);
         let mut batch = Batch::new(
-            SequentialSampler::new(input.len()).sample(),
+            Sampler::Sequential(input.len()).sample(),
             2,
             input.view(),
             target.view(),
