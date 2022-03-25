@@ -1,7 +1,7 @@
 use std::vec;
 
 use ndarray::{Axis, RemoveAxis};
-use ndarray_rand::rand::{prelude::ThreadRng, seq::index::sample};
+use ndarray_rand::rand::{prelude::ThreadRng, seq::index::sample, thread_rng};
 
 use crate::grad::{Tensor, TensorView};
 
@@ -106,12 +106,21 @@ where
     D1: RemoveAxis,
     D2: RemoveAxis,
 {
-    pub fn new(sampler: Sampler, input: Tensor<D1>, target: Tensor<D2>) -> Self {
+    pub fn new(input: Tensor<D1>, target: Tensor<D2>) -> Self {
         Self {
-            sampler,
+            sampler: Sampler::Sequential(input.len_of(Axis(0))),
             input,
             target,
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.input.len_of(Axis(0))
+    }
+
+    pub fn shuffle(mut self) -> Self {
+        self.sampler = Sampler::Random(self.size(), thread_rng());
+        self
     }
 
     pub fn batch(&mut self, batch_size: usize) -> Batch<'_, D1, D2> {
