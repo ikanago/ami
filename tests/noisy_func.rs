@@ -1,8 +1,8 @@
 use ami::{
+    data::{DataLoader, SequentialSampler},
     grad::{mse, Function, Variable},
     model::{Chainable, Input, Linear, Model, Relu},
     optimizer::GradientDescent,
-    data::{DataLoader, SequentialSampler},
     sequential,
 };
 use ndarray::{Array2, ArrayView2, Axis};

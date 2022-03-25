@@ -1,6 +1,7 @@
 use std::vec;
 
 use ndarray::{Axis, RemoveAxis};
+use ndarray_rand::rand::{prelude::ThreadRng, seq::index::sample, thread_rng};
 
 use crate::grad::{Tensor, TensorView};
 
@@ -21,6 +22,26 @@ impl SequentialSampler {
 impl Sampler for SequentialSampler {
     fn sample(&mut self) -> Vec<usize> {
         (0..self.size).into_iter().collect()
+    }
+}
+
+pub struct RandomSampler {
+    size: usize,
+    rng: ThreadRng,
+}
+
+impl RandomSampler {
+    pub fn new(size: usize) -> Self {
+        Self {
+            size,
+            rng: thread_rng(),
+        }
+    }
+}
+
+impl Sampler for RandomSampler {
+    fn sample(&mut self) -> Vec<usize> {
+        sample(&mut self.rng, self.size, self.size).into_vec()
     }
 }
 
@@ -126,6 +147,17 @@ mod tests {
     use super::*;
 
     use ndarray::{arr1, Array};
+
+    #[test]
+    fn random_sampler() {
+        let size = 10;
+        let sequential = SequentialSampler::new(size).sample();
+        let mut random = RandomSampler::new(size).sample();
+        assert_ne!(sequential, random);
+
+        random.sort();
+        assert_eq!(sequential, random);
+    }
 
     #[test]
     fn batch_sequential() {
