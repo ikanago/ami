@@ -7,6 +7,7 @@ pub mod data;
 pub mod grad;
 pub mod layer;
 pub mod loss;
+pub mod metrics;
 pub mod model;
 pub mod network;
 pub mod optimizer;
