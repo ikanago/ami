@@ -1,51 +1,71 @@
-use std::ops::Range;
+use std::vec;
 
-pub trait Sampler: Iterator {}
+use ndarray::{Axis, RemoveAxis};
+
+use crate::grad::{Tensor, TensorView};
+
+pub trait Sampler {
+    fn sample(&mut self) -> Vec<usize>;
+}
 
 pub struct SequentialSampler {
-    iter: Range<usize>,
+    size: usize,
 }
 
 impl SequentialSampler {
     pub fn new(size: usize) -> Self {
-        Self { iter: (0..size) }
+        Self { size }
     }
 }
 
-impl Iterator for SequentialSampler {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
+impl Sampler for SequentialSampler {
+    fn sample(&mut self) -> Vec<usize> {
+        (0..self.size).into_iter().collect()
     }
 }
 
-impl Sampler for SequentialSampler {}
-
-pub struct BatchSampler<S: Sampler> {
-    individual_sampler: S,
+pub struct Batch<'a, D1, D2>
+where
+    D1: RemoveAxis,
+    D2: RemoveAxis,
+{
+    indices: vec::IntoIter<usize>,
     batch_size: usize,
+    input: TensorView<'a, D1>,
+    target: TensorView<'a, D2>,
 }
 
-impl<S: Sampler> BatchSampler<S> {
-    pub fn new(sampler: S, batch_size: usize) -> Self {
+impl<'a, D1, D2> Batch<'a, D1, D2>
+where
+    D1: RemoveAxis,
+    D2: RemoveAxis,
+{
+    pub fn new(
+        indices: Vec<usize>,
+        batch_size: usize,
+        input: TensorView<'a, D1>,
+        target: TensorView<'a, D2>,
+    ) -> Self {
         Self {
-            individual_sampler: sampler,
+            indices: indices.into_iter(),
             batch_size,
+            input,
+            target,
         }
     }
 }
 
-impl<S> Iterator for BatchSampler<S>
+impl<'a, D1, D2> Iterator for Batch<'a, D1, D2>
 where
-    S: Sampler<Item = usize>,
+    D1: RemoveAxis,
+    D2: RemoveAxis,
 {
-    type Item = Vec<usize>;
+    type Item = (Tensor<D1>, Tensor<D2>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut indices = Vec::new();
         for _ in 0..self.batch_size {
-            match self.individual_sampler.next() {
+            match self.indices.next() {
                 Some(index) => {
                     indices.push(index);
                 }
@@ -53,35 +73,86 @@ where
             }
         }
 
-        if indices.len() == 0 {
+        if indices.is_empty() {
             None
         } else {
-            Some(indices)
+            Some((
+                self.input.select(Axis(0), &indices),
+                self.target.select(Axis(0), &indices),
+            ))
         }
     }
 }
 
-impl<S> Sampler for BatchSampler<S> where S: Sampler<Item = usize> {}
+pub struct DataLoader<S, D1, D2>
+where
+    S: Sampler,
+    D1: RemoveAxis,
+    D2: RemoveAxis,
+{
+    sampler: S,
+    input: Tensor<D1>,
+    target: Tensor<D2>,
+}
+
+impl<S, D1, D2> DataLoader<S, D1, D2>
+where
+    S: Sampler,
+    D1: RemoveAxis,
+    D2: RemoveAxis,
+{
+    pub fn new(sampler: S, input: Tensor<D1>, target: Tensor<D2>) -> Self {
+        Self {
+            sampler,
+            input,
+            target,
+        }
+    }
+
+    pub fn batch<'a>(&'a mut self, batch_size: usize) -> Batch<'a, D1, D2> {
+        Batch::new(
+            self.sampler.sample(),
+            batch_size,
+            self.input.view(),
+            self.target.view(),
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use ndarray::{arr1, Array};
+
     #[test]
     fn batch_sequential() {
-        let mut batch_sampler = BatchSampler::new(SequentialSampler::new(6), 2);
-        assert_eq!(Some(vec![0, 1]), batch_sampler.next());
-        assert_eq!(Some(vec![2, 3]), batch_sampler.next());
-        assert_eq!(Some(vec![4, 5]), batch_sampler.next());
-        assert_eq!(None, batch_sampler.next());
+        let input = Array::linspace(0.0, 3.0, 4);
+        let target = Array::linspace(4.0, 7.0, 4);
+        let mut batch = Batch::new(
+            SequentialSampler::new(input.len()).sample(),
+            2,
+            input.view(),
+            target.view(),
+        );
+        assert_eq!(Some((arr1(&[0.0, 1.0]), arr1(&[4.0, 5.0]))), batch.next());
+        assert_eq!(Some((arr1(&[2.0, 3.0]), arr1(&[6.0, 7.0]))), batch.next());
+        assert_eq!(None, batch.next());
     }
 
     #[test]
     fn batch_sequential_keep_remaining() {
-        let mut batch_sampler = BatchSampler::new(SequentialSampler::new(5), 2);
-        assert_eq!(Some(vec![0, 1]), batch_sampler.next());
-        assert_eq!(Some(vec![2, 3]), batch_sampler.next());
-        assert_eq!(Some(vec![4]), batch_sampler.next());
-        assert_eq!(None, batch_sampler.next());
+        let input = Array::linspace(0.0, 4.0, 5);
+        let target = Array::linspace(5.0, 9.0, 5);
+        let mut batch = Batch::new(
+            SequentialSampler::new(input.len()).sample(),
+            2,
+            input.view(),
+            target.view(),
+        );
+        assert_eq!(Some((arr1(&[0.0, 1.0]), arr1(&[5.0, 6.0]))), batch.next());
+        assert_eq!(Some((arr1(&[2.0, 3.0]), arr1(&[7.0, 8.0]))), batch.next());
+        assert_eq!(Some((arr1(&[4.0]), arr1(&[9.0]))), batch.next());
+        assert_eq!(None, batch.next());
     }
 }

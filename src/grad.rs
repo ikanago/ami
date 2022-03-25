@@ -14,6 +14,7 @@ use std::{
 use ndarray::{Array, ArrayD, ArrayView, Axis, DimMax, Dimension, IntoNdProducer, Zip};
 
 pub type Tensor<D> = Array<f32, D>;
+pub type TensorView<'a, D> = ArrayView<'a, f32, D>;
 pub type DynTensor = ArrayD<f32>;
 pub(crate) type Broadcasted<LhsDim, RhsDim> = <LhsDim as DimMax<RhsDim>>::Output;
 pub(crate) type BroadTensor<Lhs, Rhs> = Tensor<Broadcasted<Lhs, Rhs>>;
