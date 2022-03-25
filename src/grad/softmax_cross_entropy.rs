@@ -84,10 +84,12 @@ where
 
                 loss + Zip::from(&exp_input)
                     .and(target_lane)
-                    .fold(0.0, |acc, input, target| acc + target * (input / exp_sum).log2())
+                    .fold(0.0, |acc, input, target| {
+                        acc + target * (input / exp_sum).log2()
+                    })
             });
 
-        *self.data.borrow_mut() = arr0(- sum_loss / self.input.data().len_of(Axis(0)) as f32);
+        *self.data.borrow_mut() = arr0(-sum_loss / self.input.data().len_of(Axis(0)) as f32);
     }
 
     fn backward(&self) {
