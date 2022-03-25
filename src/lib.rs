@@ -74,8 +74,7 @@ where
     pub fn encode(&self, labels: &[Label]) -> Array2<f32> {
         let one_hot_vecs = labels
             .iter()
-            .map(|label| self.encode_label(label))
-            .flatten()
+            .flat_map(|label| self.encode_label(label))
             .collect();
         Array2::from_shape_vec((labels.len(), self.label_to_id.len()), one_hot_vecs).unwrap()
     }
