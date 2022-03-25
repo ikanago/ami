@@ -5,6 +5,7 @@ use ndarray_rand::rand::{prelude::ThreadRng, seq::index::sample, thread_rng};
 
 use crate::grad::{Tensor, TensorView};
 
+/// Sampler produces a vector of indices in a dataset.
 pub enum Sampler {
     Sequential(usize),
     Random(usize, ThreadRng),
@@ -19,6 +20,8 @@ impl Sampler {
     }
 }
 
+/// Batch yields a minibatch each time `Iterator::next()` is called.
+/// This struct is created in each epoch in a train phase.
 pub struct Batch<'a, D1, D2>
 where
     D1: RemoveAxis,
@@ -53,6 +56,8 @@ where
         }
     }
 
+    /// If `drop_last` is true, discard last minibatch whose size is smaller than
+    /// `self.batch_size`.
     pub fn drop_last(self, drop_last: bool) -> Self {
         Self { drop_last, ..self }
     }
@@ -91,6 +96,7 @@ where
     }
 }
 
+/// DataLoader wraps a training data.
 pub struct DataLoader<D1, D2>
 where
     D1: RemoveAxis,
@@ -118,11 +124,13 @@ where
         self.input.len_of(Axis(0))
     }
 
+    /// If enabled, generate minibatches in a random order.
     pub fn shuffle(mut self) -> Self {
         self.sampler = Sampler::Random(self.size(), thread_rng());
         self
     }
 
+    /// Create a minibatch generator. This is intended to be called each epoch.
     pub fn batch(&mut self, batch_size: usize) -> Batch<'_, D1, D2> {
         Batch::new(
             self.sampler.sample(),

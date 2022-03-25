@@ -6,7 +6,7 @@ use crate::grad::Variable;
 
 pub use gradient_descent::GradientDescent;
 
-/// Trait to abstruct optimizer.
+/// Trait to abstruct optimizers.
 pub trait Optimizer {
     fn update<D>(&self, parameter: &Variable<D>)
     where
