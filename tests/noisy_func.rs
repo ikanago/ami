@@ -1,10 +1,11 @@
 use ami::{
+    data::DataLoader,
     grad::{mse, Function, Variable},
     model::{Chainable, Input, Linear, Model, Relu},
     optimizer::GradientDescent,
     sequential,
 };
-use ndarray::{s, Array2, ArrayView2, Axis};
+use ndarray::{Array2, ArrayView2, Axis};
 use ndarray_rand::{
     rand::{thread_rng, Rng},
     rand_distr::{Distribution, Normal, Uniform},
@@ -50,12 +51,15 @@ fn generate_data(
 }
 
 #[test]
+#[ignore]
 fn regression_against_noisy_function() {
     let mut rng = thread_rng();
     let x_min = -1.0;
     let x_max = 1.0;
     let x_train = generate_data(160, 3, x_min, x_max, &mut rng);
     let y_train = func_to_learn(x_train.view());
+
+    let mut loader = DataLoader::new(x_train, y_train).shuffle();
 
     let batch_size = 16;
     let model = sequential!(Input, Linear::new(3, 4), Relu::new(), Linear::new(4, 1));
@@ -65,32 +69,22 @@ fn regression_against_noisy_function() {
 
     let epochs = 1000;
     for epoch in 0..epochs {
-        let mut has_processed = 0;
         let mut total_loss = 0.0;
         print!("epoch {}: ", epoch);
-        while has_processed < x_train.nrows() {
+        for (input, target) in loader.batch(batch_size) {
             print!("#");
 
-            let x_train_batch = Variable::new(
-                x_train
-                    .slice(s![has_processed..(has_processed + batch_size), ..])
-                    .to_owned(),
-            );
-            let y_train_batch = Variable::new(
-                y_train
-                    .slice(s![has_processed..(has_processed + batch_size), ..])
-                    .to_owned(),
-            );
+            let input = Variable::new(input);
+            let target = Variable::new(target);
 
-            let network = model.forward(x_train_batch);
-            let loss = mse(&network, &y_train_batch);
+            let network = model.forward(input);
+            let loss = mse(&network, &target);
             loss.forward();
             loss.backward();
             model.update_parameters(&optimizer);
             model.zero_gradient();
 
             total_loss += loss.data()[()];
-            has_processed += batch_size;
         }
         println!(" total loss: {}", total_loss);
     }
