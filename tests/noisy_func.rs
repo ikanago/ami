@@ -59,7 +59,11 @@ fn regression_against_noisy_function() {
     let x_train = generate_data(160, 3, x_min, x_max, &mut rng);
     let y_train = func_to_learn(x_train.view());
 
-    let mut loader = DataLoader::new(Sampler::Random(x_train.nrows(), thread_rng()), x_train, y_train);
+    let mut loader = DataLoader::new(
+        Sampler::Random(x_train.nrows(), thread_rng()),
+        x_train,
+        y_train,
+    );
 
     let batch_size = 16;
     let model = sequential!(Input, Linear::new(3, 4), Relu::new(), Linear::new(4, 1));

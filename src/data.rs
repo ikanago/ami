@@ -28,6 +28,7 @@ where
     // indices.
     indices: vec::IntoIter<usize>,
     batch_size: usize,
+    drop_last: bool,
     input: TensorView<'a, D1>,
     target: TensorView<'a, D2>,
 }
@@ -46,9 +47,18 @@ where
         Self {
             indices: indices.into_iter(),
             batch_size,
+            drop_last: false,
             input,
             target,
         }
+    }
+
+    pub fn drop_last(self, drop_last: bool) -> Self {
+        Self { drop_last, ..self }
+    }
+
+    fn should_drop_last(&self, indices: &[usize]) -> bool {
+        self.drop_last && indices.len() != self.batch_size
     }
 }
 
@@ -70,7 +80,7 @@ where
             }
         }
 
-        if indices.is_empty() {
+        if indices.is_empty() || self.should_drop_last(&indices) {
             None
         } else {
             Some((
@@ -144,6 +154,22 @@ mod tests {
         );
         assert_eq!(Some((arr1(&[0.0, 1.0]), arr1(&[4.0, 5.0]))), batch.next());
         assert_eq!(Some((arr1(&[2.0, 3.0]), arr1(&[6.0, 7.0]))), batch.next());
+        assert_eq!(None, batch.next());
+    }
+
+    #[test]
+    fn batch_sequential_drop_remaining() {
+        let input = Array::linspace(0.0, 4.0, 5);
+        let target = Array::linspace(5.0, 9.0, 5);
+        let mut batch = Batch::new(
+            Sampler::Sequential(input.len()).sample(),
+            2,
+            input.view(),
+            target.view(),
+        )
+        .drop_last(true);
+        assert_eq!(Some((arr1(&[0.0, 1.0]), arr1(&[5.0, 6.0]))), batch.next());
+        assert_eq!(Some((arr1(&[2.0, 3.0]), arr1(&[7.0, 8.0]))), batch.next());
         assert_eq!(None, batch.next());
     }
 
