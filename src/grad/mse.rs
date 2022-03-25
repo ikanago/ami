@@ -23,7 +23,6 @@ where
     Input: Function,
     Target: Function,
 {
-    // TODO: this cannot restrict the shape of target.
     data: Rc<RefCell<Tensor<Ix0>>>,
     input: Input,
     target: Target,

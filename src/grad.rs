@@ -5,6 +5,7 @@ pub mod mse;
 pub mod mul;
 pub mod relu;
 pub mod sigmoid;
+pub mod softmax_cross_entropy;
 
 use std::{
     cell::{Ref, RefCell, RefMut},
@@ -24,6 +25,7 @@ pub use matmul::{matmul, MatrixMultiplication};
 pub use mse::{mse, MeanSquaredError};
 pub use relu::{relu, Relu};
 pub use sigmoid::{sigmoid, Sigmoid};
+pub use softmax_cross_entropy::{softmax_cross_entropy, SoftmaxCrossEntropy};
 
 /// Trait to represent a computational graph of a function to be diffrentiated.
 /// All node in the graph implements this trait.
