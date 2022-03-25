@@ -29,6 +29,8 @@ where
     D1: RemoveAxis,
     D2: RemoveAxis,
 {
+    // `indices` should be an `Iterator` because we have to keep track of the current batch
+    // indices.
     indices: vec::IntoIter<usize>,
     batch_size: usize,
     input: TensorView<'a, D1>,
@@ -109,7 +111,7 @@ where
         }
     }
 
-    pub fn batch<'a>(&'a mut self, batch_size: usize) -> Batch<'a, D1, D2> {
+    pub fn batch(&mut self, batch_size: usize) -> Batch<'_, D1, D2> {
         Batch::new(
             self.sampler.sample(),
             batch_size,
