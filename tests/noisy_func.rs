@@ -51,6 +51,7 @@ fn generate_data(
 }
 
 #[test]
+#[ignore]
 fn regression_against_noisy_function() {
     let mut rng = thread_rng();
     let x_min = -1.0;
