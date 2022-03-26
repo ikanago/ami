@@ -2,7 +2,7 @@ use ami::{
     data::DataLoader,
     grad::{softmax_cross_entropy, Function, Variable},
     metrics::confusion_matrix,
-    model::{Chainable, Input, Linear, Model, Relu, Sigmoid},
+    model::{Chainable, Input, Linear, Model, Relu},
     optimizer::GradientDescent,
     sequential, OneHotEncoder,
     utils::train_test_split,
@@ -51,12 +51,13 @@ fn main() {
 
     let model = sequential!(
         Input,
-        Linear::new(4, 6),
+        Linear::new(4, 10),
         Relu::new(),
-        Linear::new(6, 3),
-        Sigmoid::new()
+        Linear::new(10, 10),
+        Relu::new(),
+        Linear::new(10, 3)
     );
-    let optimizer = GradientDescent::new(1e-3);
+    let optimizer = GradientDescent::new(1e-2);
 
     let epochs = 3000;
     let batch_size = 16;
@@ -75,6 +76,7 @@ fn main() {
 
             total_loss += loss.data()[()];
         }
+
         if epoch % 10 == 0 {
             println!("epoch {}: total loss = {}", epoch, total_loss);
         }
