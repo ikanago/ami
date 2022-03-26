@@ -71,15 +71,30 @@ fn confusion_matrix_for_one_label(
 }
 
 fn precision_for_one_label(true_pos: usize, false_pos: usize) -> f32 {
-    true_pos as f32 / (true_pos + false_pos) as f32
+    let precision = true_pos as f32 / (true_pos + false_pos) as f32;
+    if precision.is_nan() {
+        0.0
+    } else {
+        precision
+    }
 }
 
 fn recall_for_one_label(true_pos: usize, false_neg: usize) -> f32 {
-    true_pos as f32 / (true_pos + false_neg) as f32
+    let recall = true_pos as f32 / (true_pos + false_neg) as f32;
+    if recall.is_nan() {
+        0.0
+    } else {
+        recall
+    }
 }
 
 fn f1_for_one_label(precision: f32, recall: f32) -> f32 {
-    2.0 * precision * recall / (precision + recall)
+    let f1 = 2.0 * precision * recall / (precision + recall);
+    if f1.is_nan() {
+        0.0
+    } else {
+        f1
+    }
 }
 
 pub fn precision_recall_fscore<Label>(
@@ -156,5 +171,24 @@ mod tests {
         assert_relative_eq!(0.5, precision);
         assert_relative_eq!(0.5, recall);
         assert_relative_eq!(0.48148152, f1);
+    }
+
+    #[test]
+    fn precision_is_0_with_no_prediction_to_label() {
+        let y_true = vec![0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+        // No label to predict 2.
+        let y_pred = vec![0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1];
+        let confusion_matrix = confusion_matrix(&y_true, &y_pred, &[0, 1, 2]);
+        let (tp, fp, _, _) = confusion_matrix_for_one_label(&confusion_matrix, 2);
+        assert_relative_eq!(0.0, precision_for_one_label(tp, fp));
+    }
+
+    #[test]
+    fn recall_is_0_with_no_true_label() {
+        let y_true = vec![1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2];
+        let y_pred = vec![0, 0, 0, 1, 0, 1, 1, 2, 0, 1, 1, 2];
+        let confusion_matrix = confusion_matrix(&y_true, &y_pred, &[0, 1, 2]);
+        let (tp, _, f_n, _) = confusion_matrix_for_one_label(&confusion_matrix, 0);
+        assert_relative_eq!(0.0, precision_for_one_label(tp, f_n));
     }
 }
