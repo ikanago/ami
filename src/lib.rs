@@ -7,9 +7,11 @@ pub mod data;
 pub mod grad;
 pub mod layer;
 pub mod loss;
+pub mod metrics;
 pub mod model;
 pub mod network;
 pub mod optimizer;
+pub mod utils;
 
 #[macro_export]
 macro_rules! assert_rel_eq_arr1 {
@@ -49,7 +51,7 @@ where
     Label: Hash + Eq + Clone,
 {
     /// Record labels to convert.
-    pub fn new(label_kinds: Vec<Label>) -> Self {
+    pub fn new(label_kinds: &[Label]) -> Self {
         let label_to_id = label_kinds
             .iter()
             .cloned()
@@ -58,7 +60,7 @@ where
             .collect();
         Self {
             label_to_id,
-            id_to_label: label_kinds,
+            id_to_label: label_kinds.to_vec(),
         }
     }
 
@@ -118,8 +120,11 @@ mod tests {
 
     #[test]
     fn encode_labels() {
-        let label_kinds = vec!["A", "B", "C"].into_iter().map(String::from).collect();
-        let encoder = OneHotEncoder::new(label_kinds);
+        let label_kinds = vec!["A", "B", "C"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let encoder = OneHotEncoder::new(&label_kinds);
 
         let labels = vec!["A", "A", "C", "B", "C"]
             .into_iter()
@@ -140,8 +145,11 @@ mod tests {
 
     #[test]
     fn decode_one_hot() {
-        let label_kinds = vec!["A", "B", "C"].into_iter().map(String::from).collect();
-        let encoder = OneHotEncoder::new(label_kinds);
+        let label_kinds = vec!["A", "B", "C"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let encoder = OneHotEncoder::new(&label_kinds);
 
         let one_hot_vecs = arr2(&[
             [1.0, 0.0, 0.0],

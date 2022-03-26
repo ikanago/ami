@@ -2,7 +2,7 @@ use ndarray::{Array, Dimension, Ix1, Ix2};
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 
 use crate::{
-    grad::{self, add, matmul, relu, Addition, Function, MatrixMultiplication, Variable},
+    grad::{self, add, matmul, relu, sigmoid, Addition, Function, MatrixMultiplication, Variable},
     optimizer::Optimizer,
 };
 
@@ -130,7 +130,6 @@ where
         }
     }
 }
-
 /// Layer applying ReLU.
 pub struct Relu<Prev> {
     previous: Prev,
@@ -179,6 +178,60 @@ where
     Prev::Output: Function<Dim = D, GradDim = D>,
 {
     type Chained = Relu<Prev>;
+
+    fn chain(self, previous: Prev) -> Self::Chained {
+        Self::Chained { previous }
+    }
+}
+
+/// Layer applying sigmoid.
+pub struct Sigmoid<Prev> {
+    previous: Prev,
+}
+
+impl Sigmoid<()> {
+    pub fn new() -> Self {
+        Self { previous: () }
+    }
+}
+
+impl Default for Sigmoid<()> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<D, InD, Input, Prev> Model<InD> for Sigmoid<Prev>
+where
+    D: Dimension,
+    InD: Dimension,
+    Input: Function<Dim = D, GradDim = D>,
+    Prev: Model<InD, Output = Input>,
+{
+    type Output = grad::Sigmoid<D, Input>;
+
+    fn forward(&self, input: Variable<InD>) -> Self::Output {
+        let previous_output = self.previous.forward(input);
+        sigmoid(&previous_output)
+    }
+
+    fn update_parameters<Opt: Optimizer>(&self, optimizer: &Opt) {
+        self.previous.update_parameters(optimizer);
+    }
+
+    fn zero_gradient(&self) {
+        self.previous.zero_gradient();
+    }
+}
+
+impl<D, InD, Prev> Chainable<InD, Prev> for Sigmoid<()>
+where
+    D: Dimension,
+    InD: Dimension,
+    Prev: Model<InD>,
+    Prev::Output: Function<Dim = D, GradDim = D>,
+{
+    type Chained = Sigmoid<Prev>;
 
     fn chain(self, previous: Prev) -> Self::Chained {
         Self::Chained { previous }
