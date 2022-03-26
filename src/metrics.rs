@@ -1,4 +1,6 @@
 /// Construct confusion matrix from `y_true` and `y_pred`.
+/// An item in i-th row and j-th column is the number of predicted j-th label where a true label is
+/// i-th one.
 /// For correct result, the items in `label_kinds` must be unique.
 pub fn confusion_matrix<Label>(
     y_true: &[Label],
@@ -11,14 +13,16 @@ where
     label_kinds
         .iter()
         .map(|true_label| {
-            label_kinds.iter().map(|pred_label| {
-                y_true
-                    .iter()
-                    .zip(y_pred.iter())
-                    .filter(|(t, p)| t.clone() == true_label && p.clone() == pred_label)
-                    .count()
-            })
-            .collect()
+            label_kinds
+                .iter()
+                .map(|pred_label| {
+                    y_true
+                        .iter()
+                        .zip(y_pred.iter())
+                        .filter(|(t, p)| &(*t).clone() == true_label && &(*p).clone() == pred_label)
+                        .count()
+                })
+                .collect()
         })
         .collect()
 }
@@ -34,6 +38,20 @@ mod tests {
         assert_eq!(
             vec![vec![3, 1, 0], vec![1, 2, 1], vec![1, 2, 1]],
             confusion_matrix(&y_true, &y_pred, &[0, 1, 2])
+        );
+    }
+
+    #[test]
+    fn test_confusion_matrix_on_string_label() {
+        let y_true = vec![
+            "ant", "ant", "ant", "cat", "cat", "cat", "dog", "dog", "dog",
+        ];
+        let y_pred = vec![
+            "ant", "ant", "cat", "cat", "cat", "cat", "ant", "cat", "dog",
+        ];
+        assert_eq!(
+            vec![vec![2, 1, 0], vec![0, 3, 0], vec![1, 1, 1]],
+            confusion_matrix(&y_true, &y_pred, &["ant", "cat", "dog"])
         );
     }
 }
