@@ -1,11 +1,12 @@
 use ami::{
     data::DataLoader,
     grad::{softmax_cross_entropy, Function, Variable},
-    metrics::confusion_matrix,
+    metrics::{accuracy, confusion_matrix},
     model::{Chainable, Input, Linear, Model, Relu},
     optimizer::GradientDescent,
-    sequential, OneHotEncoder,
+    sequential,
     utils::train_test_split,
+    OneHotEncoder,
 };
 use csv::Reader;
 use ndarray::Array2;
@@ -45,7 +46,6 @@ fn main() {
     let y_train = encoder.encode(&y_train);
     let x_test =
         Array2::from_shape_vec((x_test.len(), 4), x_test.into_iter().flatten().collect()).unwrap();
-    let y_test = encoder.encode(&y_test);
 
     let mut loader = DataLoader::new(x_train, y_train).shuffle();
 
@@ -84,10 +84,9 @@ fn main() {
 
     let y_pred = model.forward(Variable::new(x_test));
     y_pred.forward();
-    let confusion_matrix = confusion_matrix(
-        &encoder.decode(y_test),
-        &encoder.decode(y_pred.data().clone()),
-        &labels,
-    );
+    let y_pred = encoder.decode(y_pred.data().clone());
+    let confusion_matrix = confusion_matrix(&y_test, &y_pred, &labels);
+
+    println!("accuracy: {}", accuracy(&y_test, &y_pred));
     println!("{:?}", confusion_matrix);
 }

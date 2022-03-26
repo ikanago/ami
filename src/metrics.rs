@@ -1,3 +1,16 @@
+/// Compute accuracy of the predicted labels `y_pred` to the correct labels `y_true`.
+pub fn accuracy<Label>(y_true: &[Label], y_pred: &[Label]) -> f32
+where
+    Label: Eq,
+{
+    let n_corrects = y_true
+        .iter()
+        .zip(y_pred.iter())
+        .filter(|(t, p)| t == p)
+        .count();
+    n_corrects as f32 / y_true.len() as f32
+}
+
 /// Construct confusion matrix from `y_true` and `y_pred`.
 /// An item in i-th row and j-th column is the number of predicted j-th label where a true label is
 /// i-th one.
@@ -29,7 +42,16 @@ where
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_relative_eq;
+
     use super::*;
+
+    #[test]
+    fn test_accuracy() {
+        let y_true = vec![0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+        let y_pred = vec![0, 0, 0, 1, 0, 1, 1, 2, 0, 1, 1, 2];
+        assert_relative_eq!(0.5, accuracy(&y_true, &y_pred))
+    }
 
     #[test]
     fn test_confusion_matrix() {
