@@ -1,7 +1,7 @@
 use ami::{
     data::DataLoader,
     grad::{softmax_cross_entropy, Function, Variable},
-    metrics::{accuracy, confusion_matrix},
+    metrics::{accuracy, confusion_matrix, precision_recall_fscore},
     model::{Chainable, Input, Linear, Model, Relu},
     optimizer::GradientDescent,
     sequential,
@@ -87,6 +87,10 @@ fn main() {
     let y_pred = encoder.decode(y_pred.data().clone());
     let confusion_matrix = confusion_matrix(&y_test, &y_pred, &labels);
 
-    println!("accuracy: {}", accuracy(&y_test, &y_pred));
+    let (precision, recall, f1) = precision_recall_fscore(&y_test, &y_pred, &labels);
+    println!("precision: {}", precision);
+    println!("recall:    {}", recall);
+    println!("f1_score   {}", f1);
+    println!("accuracy:  {}", accuracy(&y_test, &y_pred));
     println!("{:?}", confusion_matrix);
 }

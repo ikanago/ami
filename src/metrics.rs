@@ -78,30 +78,36 @@ fn recall_for_one_label(true_pos: usize, false_neg: usize) -> f32 {
     true_pos as f32 / (true_pos + false_neg) as f32
 }
 
-pub fn precision_recall<Label>(
+fn f1_for_one_label(precision: f32, recall: f32) -> f32 {
+    2.0 * precision * recall / (precision + recall)
+}
+
+pub fn precision_recall_fscore<Label>(
     y_true: &[Label],
     y_pred: &[Label],
     label_kinds: &[Label],
-) -> (f32, f32)
+) -> (f32, f32, f32)
 where
     Label: Eq + Clone,
 {
     let confusion_matrix = confusion_matrix(y_true, y_pred, label_kinds);
     // Calculate macro average.
-    let (precision_sum, recall_sum) = (0..label_kinds.len())
+    let (precision_sum, recall_sum, f1_sum) = (0..label_kinds.len())
         .map(|label_index| {
             let (true_pos, false_pos, false_neg, _) =
                 confusion_matrix_for_one_label(&confusion_matrix, label_index);
             let precision = precision_for_one_label(true_pos, false_pos);
             let recall = recall_for_one_label(true_pos, false_neg);
-            (precision, recall)
+            let f1 = f1_for_one_label(precision, recall);
+            (precision, recall, f1)
         })
-        .fold((0.0, 0.0), |(precision, recall), (p, r)| {
-            (precision + p, recall + r)
+        .fold((0.0, 0.0, 0.0), |(precision, recall, f1), (p, r, f)| {
+            (precision + p, recall + r, f1 + f)
         });
     (
         precision_sum / label_kinds.len() as f32,
         recall_sum / label_kinds.len() as f32,
+        f1_sum / label_kinds.len() as f32,
     )
 }
 
@@ -146,8 +152,9 @@ mod tests {
     fn test_precision_recall() {
         let y_true = vec![0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
         let y_pred = vec![0, 0, 0, 1, 0, 1, 1, 2, 0, 1, 1, 2];
-        let (precision, recall) = precision_recall(&y_true, &y_pred, &[0, 1, 2]);
+        let (precision, recall, f1) = precision_recall_fscore(&y_true, &y_pred, &[0, 1, 2]);
         assert_relative_eq!(0.5, precision);
         assert_relative_eq!(0.5, recall);
+        assert_relative_eq!(0.48148152, f1);
     }
 }
