@@ -40,6 +40,71 @@ where
         .collect()
 }
 
+/// Calculate the number of tp, fp, fn, tn.
+/// `confusion_matrix` is a confusion matrix of all the labels.
+/// `label_index` is the index of the label in the whole labels.
+fn confusion_matrix_for_one_label(
+    confusion_matrix: &[Vec<usize>],
+    label_index: usize,
+) -> (usize, usize, usize, usize) {
+    let mut true_pos = 0;
+    let mut false_pos = 0;
+    let mut false_neg = 0;
+    let mut true_neg = 0;
+
+    for (i, row) in confusion_matrix.iter().enumerate() {
+        for j in 0..row.len() {
+            let count = confusion_matrix[i][j];
+            if i == label_index && j == label_index {
+                true_pos += count;
+            } else if i == label_index {
+                false_neg += count;
+            } else if j == label_index {
+                false_pos += count;
+            } else {
+                true_neg += count;
+            }
+        }
+    }
+
+    (true_pos, false_pos, false_neg, true_neg)
+}
+
+fn precision_for_one_label(true_pos: usize, false_pos: usize) -> f32 {
+    true_pos as f32 / (true_pos + false_pos) as f32
+}
+
+fn recall_for_one_label(true_pos: usize, false_neg: usize) -> f32 {
+    true_pos as f32 / (true_pos + false_neg) as f32
+}
+
+pub fn precision_recall<Label>(
+    y_true: &[Label],
+    y_pred: &[Label],
+    label_kinds: &[Label],
+) -> (f32, f32)
+where
+    Label: Eq + Clone,
+{
+    let confusion_matrix = confusion_matrix(y_true, y_pred, label_kinds);
+    // Calculate macro average.
+    let (precision_sum, recall_sum) = (0..label_kinds.len())
+        .map(|label_index| {
+            let (true_pos, false_pos, false_neg, _) =
+                confusion_matrix_for_one_label(&confusion_matrix, label_index);
+            let precision = precision_for_one_label(true_pos, false_pos);
+            let recall = recall_for_one_label(true_pos, false_neg);
+            (precision, recall)
+        })
+        .fold((0.0, 0.0), |(precision, recall), (p, r)| {
+            (precision + p, recall + r)
+        });
+    (
+        precision_sum / label_kinds.len() as f32,
+        recall_sum / label_kinds.len() as f32,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
@@ -75,5 +140,14 @@ mod tests {
             vec![vec![2, 1, 0], vec![0, 3, 0], vec![1, 1, 1]],
             confusion_matrix(&y_true, &y_pred, &["ant", "cat", "dog"])
         );
+    }
+
+    #[test]
+    fn test_precision_recall() {
+        let y_true = vec![0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+        let y_pred = vec![0, 0, 0, 1, 0, 1, 1, 2, 0, 1, 1, 2];
+        let (precision, recall) = precision_recall(&y_true, &y_pred, &[0, 1, 2]);
+        assert_relative_eq!(0.5, precision);
+        assert_relative_eq!(0.5, recall);
     }
 }

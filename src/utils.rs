@@ -2,7 +2,11 @@ use ndarray_rand::rand::{prelude::SliceRandom, thread_rng};
 
 /// Split dataset into train and test data.
 /// `test_ratio` is a ratio of the number of test data to the whole dataset.
-pub fn train_test_split<X, Y>(x: Vec<X>, y: Vec<Y>, test_ratio: f32) -> (Vec<X>, Vec<Y>, Vec<X>, Vec<Y>)
+pub fn train_test_split<X, Y>(
+    x: Vec<X>,
+    y: Vec<Y>,
+    test_ratio: f32,
+) -> (Vec<X>, Vec<Y>, Vec<X>, Vec<Y>)
 where
     X: Clone,
     Y: Clone,
