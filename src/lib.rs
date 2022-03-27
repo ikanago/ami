@@ -2,14 +2,10 @@ use std::{collections::HashMap, hash::Hash};
 
 use ndarray::{Array2, Axis};
 
-pub mod activation;
 pub mod data;
 pub mod grad;
-pub mod layer;
-pub mod loss;
 pub mod metrics;
 pub mod model;
-pub mod network;
 pub mod optimizer;
 pub mod utils;
 
